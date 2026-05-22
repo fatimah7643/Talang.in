@@ -1,5 +1,13 @@
 import express from 'express';
-import { createGroup, addMember, getMembers, removeMember, getAllGroups, getGroupDetail } from '../controllers/groupController.js';
+import { 
+    createGroup, 
+    addMember, 
+    getMembers, 
+    removeMember, 
+    getAllGroups, 
+    getGroupDetail,
+    getGroupsByUser 
+} from '../controllers/groupController.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
 
 
@@ -11,5 +19,6 @@ router.get('/:group_id/members', authenticate, getMembers);                   //
 router.delete('/:group_id/members/:profile_id', authenticate, removeMember); // DELETE /api/v1/groups/:group_id/members/:profile_id
 router.get('/', authenticate, getAllGroups);        // GET /api/v1/groups
 router.get('/:group_id', authenticate, getGroupDetail); // GET /api/v1/groups/:group_id
+router.get('/user/:user_id', authenticate, getGroupsByUser); // GET /api/v1/groups/user/:user_id
 
 export default router;

@@ -221,3 +221,34 @@ export const getGroupDetail = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// GET /api/v1/groups/user/:user_id
+export const getGroupsByUser = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+
+    const { data, error } = await supabase
+      .from('group_members')
+      .select(`
+        role,
+        joined_at,
+        groups (
+          id,
+          group_name,
+          created_at
+        )
+      `)
+      .eq('profile_id', user_id);
+
+    if (error) throw error;
+
+    return res.status(200).json({
+      success: true,
+      user_id,
+      total_groups: data.length,
+      data
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
