@@ -79,32 +79,31 @@ export const splitBill = async (req, res) => {
 // POST /api/v1/bills/split-nlp
 export const splitBillNLP = async (req, res) => {
   try {
-    const { group_id, raw_text, group_members } = req.body;
-
+    const { group_id, raw_text, group_members, custom_splits } = req.body;
+ 
     if (!group_id || !raw_text || !group_members || !Array.isArray(group_members)) {
       return res.status(400).json({
         success: false,
         message: "group_id, raw_text, dan group_members (array nama) wajib diisi!"
       });
     }
-
+ 
     // 1. Kirim ke AI model
     const aiResponse = await fetch(`${process.env.AI_BASE_URL}/parse-transaction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: raw_text,
-        entities: [],
         group_members
       })
     });
-
+ 
     if (!aiResponse.ok) {
       throw new Error("AI service tidak merespons dengan benar.");
     }
-
+ 
     const aiResult = await aiResponse.json();
-
+ 
     if (aiResult.status !== 'success') {
       return res.status(400).json({
         success: false,
@@ -112,47 +111,102 @@ export const splitBillNLP = async (req, res) => {
         ai_response: aiResult
       });
     }
-
-    // 2. Cari payer_id dari nama paidBy di profiles
+ 
+    // ── WORKAROUND 1: Case-insensitive matching untuk paidBy ──────────────────
+    // AI kadang return nama dengan casing berbeda dari group_members
+    // Contoh: AI return "risna a" padahal di group_members "Risna A"
+    const matchedPayer = group_members.find(
+      m => m.toLowerCase() === aiResult.paidBy?.toLowerCase()
+    );
+ 
+    // ── WORKAROUND 2: Validasi payer asing ────────────────────────────────────
+    // Kalau paidBy dari AI tidak ada di group_members sama sekali → tolak
+    // Ini mencegah silent bug dimana payer_id salah assign
+    if (!matchedPayer) {
+      return res.status(400).json({
+        success: false,
+        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di group_members. Pastikan nama di teks sesuai dengan anggota grup.`,
+        ai_parsed: aiResult,
+        group_members
+      });
+    }
+ 
+    // ── WORKAROUND 3: Title fallback ──────────────────────────────────────────
+    // AI kadang return "Transaksi AI" kalau tidak bisa extract judul dari teks
+    // Fallback: ambil kata ke-3 sampai ke-5 dari raw_text sebagai judul sementara
+    const AI_DEFAULT_TITLE = "Transaksi AI";
+    const resolvedTitle = aiResult.title === AI_DEFAULT_TITLE
+      ? raw_text.trim().split(/\s+/).slice(2, 5).join(" ")
+      : aiResult.title;
+ 
+    // 2. Cari payer_id dari nama matchedPayer (casing sudah benar) di profiles
     const { data: payerProfile, error: payerError } = await supabase
       .from('profiles')
       .select('id')
-      .eq('username', aiResult.paidBy)
+      .eq('username', matchedPayer)
       .single();
-
+ 
     if (payerError || !payerProfile) {
       return res.status(400).json({
         success: false,
-        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di database. Pastikan username sesuai.`,
+        message: `Pembayar "${matchedPayer}" tidak ditemukan di database. Pastikan username sesuai.`,
         parsed: aiResult
       });
     }
-
-    // 3. Simpan bill utama
+ 
+    // 3. Simpan bill utama (gunakan resolvedTitle dan matchedPayer)
     const { data: billData, error: billError } = await supabase
       .from('bills')
       .insert([{
         group_id,
         payer_id: payerProfile.id,
         amount: aiResult.amount,
-        description: aiResult.title,
+        description: resolvedTitle,
         category: aiResult.category || 'Lainnya'
       }])
       .select();
-
+ 
     if (billError) throw billError;
-
+ 
     const bill = billData[0];
-
+ 
+    // ── WORKAROUND 4: Custom splits override ─────────────────────────────────
+    // Kalau request menyertakan custom_splits → pakai itu, skip participants AI
+    // Kalau tidak ada → pakai hasil AI seperti biasa (equal split)
+    const isCustomSplit = Array.isArray(custom_splits) && custom_splits.length > 0;
+ 
+    // Validasi total custom_splits harus sama dengan amount dari AI
+    if (isCustomSplit) {
+      const totalCustom = custom_splits.reduce((sum, s) => sum + Number(s.amount), 0);
+      if (Math.abs(totalCustom - aiResult.amount) > 1) {
+        return res.status(400).json({
+          success: false,
+          message: `Total custom_splits (${totalCustom}) tidak sesuai dengan amount (${aiResult.amount})!`
+        });
+      }
+    }
+ 
+    // Tentukan sumber participants: custom atau dari AI
+    const participantSource = isCustomSplit
+      ? custom_splits.map(s => ({ name: s.name, amount: Number(s.amount) }))
+      : aiResult.participants;
+ 
     // 4. Map participants ke member_id lalu simpan splits
+    // Pakai case-insensitive matching untuk nama participant
     const splitRows = [];
-    for (const participant of aiResult.participants) {
+    for (const participant of participantSource) {
+      const matchedMember = group_members.find(
+        m => m.toLowerCase() === participant.name?.toLowerCase()
+      );
+ 
+      if (!matchedMember) continue; // skip kalau nama tidak ada di group_members
+ 
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
-        .eq('username', participant.name)
+        .eq('username', matchedMember)
         .single();
-
+ 
       if (profile) {
         splitRows.push({
           bill_id: bill.id,
@@ -163,30 +217,30 @@ export const splitBillNLP = async (req, res) => {
         });
       }
     }
-
+ 
     if (splitRows.length > 0) {
       const { error: splitError } = await supabase
         .from('bill_splits')
         .insert(splitRows);
-
+ 
       if (splitError) throw splitError;
     }
-
+ 
     return res.status(201).json({
       success: true,
       message: "Tagihan berhasil dibuat via AI Smart Input!",
       ai_parsed: {
-        title: aiResult.title,
+        title: resolvedTitle,
         amount: aiResult.amount,
-        paidBy: aiResult.paidBy,
+        paidBy: matchedPayer,
         category: aiResult.category,
-        splitMethod: aiResult.splitMethod,
-        participants: aiResult.participants
+        splitMethod: isCustomSplit ? 'custom' : aiResult.splitMethod,
+        participants: participantSource
       },
       bill_summary: bill,
       split_count: splitRows.length
     });
-
+ 
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
