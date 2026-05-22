@@ -1,0 +1,49 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+import authRoutes from './routes/authRoutes.js';
+import profileRoutes from './routes/profileRoutes.js';
+import groupRoutes from './routes/groupRoutes.js';
+import billRoutes from './routes/billRoutes.js';
+import settlementRoutes from './routes/settlementRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Server API Talang.in aktif! 🚀',
+    version: 'v1',
+    endpoints: [
+      '/api/v1/auth',
+      '/api/v1/profiles',
+      '/api/v1/groups',
+      '/api/v1/bills',
+      '/api/v1/settlements',
+      '/api/v1/analytics'
+    ]
+  });
+});
+
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/profiles', profileRoutes);
+app.use('/api/v1/groups', groupRoutes);
+app.use('/api/v1/bills', billRoutes);
+app.use('/api/v1/settlements', settlementRoutes);
+app.use('/api/v1/analytics', analyticsRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.path} tidak ditemukan!`
+  });
+});
+
+export default app;
