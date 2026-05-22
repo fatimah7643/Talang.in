@@ -67,7 +67,7 @@ export const splitBill = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Tagihan berhasil dicatat dan dibagi! 🧾",
+      message: "Tagihan berhasil dicatat dan dibagi!",
       bill_summary: bill,
       split_details: splitData
     });
@@ -79,29 +79,114 @@ export const splitBill = async (req, res) => {
 // POST /api/v1/bills/split-nlp
 export const splitBillNLP = async (req, res) => {
   try {
-    const { group_id, payer_id, raw_text, amount, category, split_count, payer_name, description } = req.body;
+    const { group_id, raw_text, group_members } = req.body;
 
-    // Jika dipanggil dari app.js lama (dengan amount, category, split_count)
-    if (amount && category && split_count) {
-      return res.status(200).json({
-        success: true,
-        parsed_result: { amount, category, split_count, payer_name, description }
-      });
-    }
-
-    if (!group_id || !payer_id || !raw_text) {
+    if (!group_id || !raw_text || !group_members || !Array.isArray(group_members)) {
       return res.status(400).json({
         success: false,
-        message: "group_id, payer_id, dan raw_text wajib diisi!"
+        message: "group_id, raw_text, dan group_members (array nama) wajib diisi!"
       });
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "NLP endpoint aktif. Menunggu integrasi model AI. 🤖",
-      received: { group_id, payer_id, raw_text },
-      note: "Tim AI perlu mengisi logika parsing di sini."
+    // 1. Kirim ke AI model
+    const aiResponse = await fetch(`${process.env.AI_BASE_URL}/parse-transaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: raw_text,
+        entities: [],
+        group_members
+      })
     });
+
+    if (!aiResponse.ok) {
+      throw new Error("AI service tidak merespons dengan benar.");
+    }
+
+    const aiResult = await aiResponse.json();
+
+    if (aiResult.status !== 'success') {
+      return res.status(400).json({
+        success: false,
+        message: "AI gagal memproses teks transaksi.",
+        ai_response: aiResult
+      });
+    }
+
+    // 2. Cari payer_id dari nama paidBy di profiles
+    const { data: payerProfile, error: payerError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', aiResult.paidBy)
+      .single();
+
+    if (payerError || !payerProfile) {
+      return res.status(400).json({
+        success: false,
+        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di database. Pastikan username sesuai.`,
+        parsed: aiResult
+      });
+    }
+
+    // 3. Simpan bill utama
+    const { data: billData, error: billError } = await supabase
+      .from('bills')
+      .insert([{
+        group_id,
+        payer_id: payerProfile.id,
+        amount: aiResult.amount,
+        description: aiResult.title,
+        category: aiResult.category || 'Lainnya'
+      }])
+      .select();
+
+    if (billError) throw billError;
+
+    const bill = billData[0];
+
+    // 4. Map participants ke member_id lalu simpan splits
+    const splitRows = [];
+    for (const participant of aiResult.participants) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', participant.name)
+        .single();
+
+      if (profile) {
+        splitRows.push({
+          bill_id: bill.id,
+          member_id: profile.id,
+          share_amount: participant.amount,
+          amount_paid: 0,
+          is_paid: false
+        });
+      }
+    }
+
+    if (splitRows.length > 0) {
+      const { error: splitError } = await supabase
+        .from('bill_splits')
+        .insert(splitRows);
+
+      if (splitError) throw splitError;
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Tagihan berhasil dibuat via AI Smart Input!",
+      ai_parsed: {
+        title: aiResult.title,
+        amount: aiResult.amount,
+        paidBy: aiResult.paidBy,
+        category: aiResult.category,
+        splitMethod: aiResult.splitMethod,
+        participants: aiResult.participants
+      },
+      bill_summary: bill,
+      split_count: splitRows.length
+    });
+
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
