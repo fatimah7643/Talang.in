@@ -76,6 +76,29 @@ export const splitBill = async (req, res) => {
   }
 };
 
+// Helper: parse nominal dari string (handle "10k", "300ribu", "150.000", dll)
+const parseNominal = (str) => {
+  if (!str) return 0;
+  const cleaned = str.toString().toLowerCase()
+    .replace(/\./g, '')
+    .replace(/,/g, '')
+    .replace('ribu', '000')
+    .replace('rb', '000')
+    .replace('k', '000')
+    .replace('juta', '000000')
+    .replace('jt', '000000')
+    .trim();
+  return parseInt(cleaned) || 0;
+};
+
+// Helper: cari semua nominal dari raw_text menggunakan regex
+const extractAllNominalsFromText = (text) => {
+  // Pattern: angka diikuti k/rb/ribu/juta atau angka dengan titik/koma
+  const pattern = /(\d+(?:[.,]\d+)*(?:k|rb|ribu|juta|jt)?)/gi;
+  const matches = text.match(pattern) || [];
+  return matches.map(m => parseNominal(m)).filter(n => n > 0);
+};
+
 // POST /api/v1/bills/split-nlp
 export const splitBillNLP = async (req, res) => {
   try {
@@ -108,120 +131,98 @@ export const splitBillNLP = async (req, res) => {
     }
 
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
-
-    // 2a. Ekstrak nominal per orang dari raw_text menggunakan rawEntities
-    // Bangun map: nama -> nominal dari rawEntities AI
-    const personPriceMap = {};
     const entities = aiResult.rawEntities || [];
 
-    // Loop entitas, pasangkan PERSON dengan PRICE terdekat setelahnya
+    // 2a. Bangun map PERSON → PRICE dari rawEntities
+    // Pasangkan setiap PERSON dengan PRICE terdekat setelahnya
+    const personAmountMap = {};
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].label === 'PERSON') {
         const personName = entities[i].text;
-        // Cari PRICE berikutnya yang posisinya dekat
+        // Cari PRICE berikutnya
         for (let j = i + 1; j < entities.length; j++) {
           if (entities[j].label === 'PRICE') {
-            // Ambil nominal dari participants AI untuk person ini
-            const participant = aiResult.participants?.find(
-              p => p.name.toLowerCase() === personName.toLowerCase()
-            );
-            if (participant) {
-              personPriceMap[personName] = participant.amount;
-            }
+            personAmountMap[personName] = parseNominal(entities[j].text);
             break;
           }
-          // Stop kalau ketemu PERSON lain sebelum PRICE
           if (entities[j].label === 'PERSON') break;
         }
       }
     }
 
-    // 2b. Deteksi apakah ini custom split
-    // Custom split = ada nominal berbeda-beda per orang di raw_text
-    // Cara deteksi: cek apakah participants AI punya amount berbeda-beda
-    const participantAmounts = (aiResult.participants || []).map(p => p.amount);
-    const uniqueAmounts = new Set(participantAmounts);
-    const hasCustomAmounts = uniqueAmounts.size > 1;
+    // 2b. Cari total utama dari raw_text menggunakan regex
+    // Ambil semua nominal dari teks, lalu total = nominal terbesar
+    const allNominals = extractAllNominalsFromText(raw_text);
+    const maxNominal = allNominals.length > 0 ? Math.max(...allNominals) : 0;
 
-    // Juga cek dari personPriceMap — kalau ada lebih dari 1 orang dengan nominal beda
-    const hasPersonSpecificPrices = Object.keys(personPriceMap).length > 1;
+    // Total yang benar:
+    // - Kalau ada nominal lebih besar dari aiResult.amount → pakai itu
+    // - Kalau tidak → pakai aiResult.amount
+    const correctedAmount = maxNominal > aiResult.amount ? maxNominal : aiResult.amount;
 
-    const isCustomSplit = hasCustomAmounts || hasPersonSpecificPrices;
+    // 2c. Tentukan split method
+    // Custom split = ada PERSON dengan PRICE spesifik di rawEntities
+    const hasPersonSpecificAmounts = Object.keys(personAmountMap).length > 0;
+    const isCustomSplit = hasPersonSpecificAmounts;
 
-    // 2c. Koreksi total amount
-    // Ambil semua PRICE dari rawEntities
-    const allPrices = entities
-      .filter(e => e.label === 'PRICE')
-      .map(e => {
-        // Parse nominal dari text (handle "10k", "300ribu", "150.000", dll)
-        const raw = e.text.toLowerCase()
-          .replace('ribu', '000')
-          .replace('k', '000')
-          .replace('rb', '000')
-          .replace(/\./g, '')
-          .replace(/,/g, '');
-        return parseInt(raw) || 0;
-      });
-
-    // Total yang benar = ambil nominal terbesar sebagai total utama
-    // (asumsi: nominal terbesar = total tagihan, bukan split per orang)
-    const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) : aiResult.amount;
-
-    // Jika AI salah baca total (misal: 250k padahal harusnya 300k)
-    // Gunakan maxPrice kalau lebih besar dari aiResult.amount
-    const correctedAmount = maxPrice > aiResult.amount ? maxPrice : aiResult.amount;
-
-    // 2d. Koreksi participants untuk custom split
-    let correctedParticipants = aiResult.participants || [];
+    // 2d. Bangun participants yang benar
+    let finalParticipants = [];
+    let finalSplitMethod = 'equal';
 
     if (isCustomSplit) {
-      // Hitung total dari participants yang sudah diketahui nominalnya
-      const knownTotal = correctedParticipants
-        .filter(p => p.amount > 0)
-        .reduce((sum, p) => sum + p.amount, 0);
+      finalSplitMethod = 'custom';
 
-      // Cek apakah ada payer yang belum dapat porsi (auto remainder)
+      // Hitung total yang sudah diketahui dari personAmountMap
+      const knownTotal = Object.values(personAmountMap).reduce((sum, v) => sum + v, 0);
+
+      // Sisa untuk payer (yang tidak punya PRICE di rawEntities)
       const payer = aiResult.paidBy;
-      const payerInParticipants = correctedParticipants.find(
-        p => p.name.toLowerCase() === payer?.toLowerCase()
-      );
+      const payerHasAmount = personAmountMap.hasOwnProperty(payer);
+      const remainder = correctedAmount - knownTotal;
 
-      // Jika total known < correctedAmount, payer dapat sisanya
-      if (knownTotal < correctedAmount && payerInParticipants) {
-        const remainder = correctedAmount - knownTotal;
-        // Cek apakah porsi payer di AI sudah dihitung salah (equal)
-        const othersTotal = correctedParticipants
-          .filter(p => p.name.toLowerCase() !== payer?.toLowerCase())
-          .reduce((sum, p) => sum + p.amount, 0);
+      // Bangun participants dari semua group_members
+      finalParticipants = group_members.map(name => {
+        // Cari di personAmountMap (case-insensitive)
+        const matchedKey = Object.keys(personAmountMap).find(
+          k => k.toLowerCase() === name.toLowerCase()
+        );
 
-        if (othersTotal < correctedAmount) {
-          correctedParticipants = correctedParticipants.map(p => {
-            if (p.name.toLowerCase() === payer?.toLowerCase()) {
-              return { ...p, amount: correctedAmount - othersTotal };
-            }
-            return p;
-          });
+        if (matchedKey) {
+          return { name, amount: personAmountMap[matchedKey] };
         }
+
+        // Kalau payer tidak punya amount → dapat sisa
+        if (name.toLowerCase() === payer?.toLowerCase() && !payerHasAmount && remainder > 0) {
+          return { name, amount: remainder };
+        }
+
+        // Default: 0 (tidak terlibat atau tidak terdeteksi)
+        return { name, amount: 0 };
+      }).filter(p => p.amount > 0);
+
+      // Validasi: total finalParticipants harus = correctedAmount
+      const totalCheck = finalParticipants.reduce((sum, p) => sum + p.amount, 0);
+      const diff = Math.abs(totalCheck - correctedAmount);
+
+      // Kalau masih selisih > 1000, fallback equal
+      if (diff > 1000) {
+        finalSplitMethod = 'equal';
+        const equalShare = Math.floor(correctedAmount / group_members.length);
+        const rem = correctedAmount - (equalShare * group_members.length);
+        finalParticipants = group_members.map((name, idx) => ({
+          name,
+          amount: idx === 0 ? equalShare + rem : equalShare
+        }));
       }
-    }
-
-    // 2e. Validasi final: total split harus = correctedAmount
-    const totalSplit = correctedParticipants.reduce((sum, p) => sum + p.amount, 0);
-    const splitDiff = Math.abs(totalSplit - correctedAmount);
-
-    // Jika masih selisih > 1000, fallback ke equal split
-    let finalParticipants = correctedParticipants;
-    let finalSplitMethod = isCustomSplit ? 'custom' : 'equal';
-
-    if (splitDiff > 1000) {
-      // Fallback: bagi rata
+    } else {
+      // Equal split
+      finalSplitMethod = 'equal';
       const equalShare = Math.floor(correctedAmount / group_members.length);
-      const remainder = correctedAmount - (equalShare * group_members.length);
+      const rem = correctedAmount - (equalShare * group_members.length);
       finalParticipants = group_members.map((name, idx) => ({
         name,
-        amount: idx === 0 ? equalShare + remainder : equalShare
+        amount: idx === 0 ? equalShare + rem : equalShare
       }));
-      finalSplitMethod = 'equal';
     }
 
     // ── STEP 3: Simpan ke Database ──────────────────────────────
@@ -241,7 +242,7 @@ export const splitBillNLP = async (req, res) => {
       });
     }
 
-    // Simpan bill utama dengan amount yang sudah dikoreksi
+    // Simpan bill
     const { data: billData, error: billError } = await supabase
       .from('bills')
       .insert([{
@@ -254,7 +255,6 @@ export const splitBillNLP = async (req, res) => {
       .select();
 
     if (billError) throw billError;
-
     const bill = billData[0];
 
     // Simpan splits
