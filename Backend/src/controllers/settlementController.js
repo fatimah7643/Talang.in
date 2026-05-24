@@ -12,7 +12,7 @@ export const getDebtRecap = async (req, res) => {
 
     const { data: bills, error: billsError } = await supabase
       .from('bills')
-      .select('id, payer_id, description, category, profiles!payer_id(username, full_name)')
+      .select('id, payer_id, description, category, payer:profiles!bills_payer_id_fkey(username, full_name)')
       .eq('group_id', group_id);
 
     if (billsError) throw billsError;
@@ -26,7 +26,7 @@ export const getDebtRecap = async (req, res) => {
 
     const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
-      .select('id, bill_id, member_id, share_amount, amount_paid, is_paid, profiles!member_id(username, full_name)')
+      .select('member_id, bill_id, share_amount, amount_paid, is_paid, member:profiles!bill_splits_member_id_fkey(username, full_name)')
       .in('bill_id', billIds)
       .eq('is_paid', false);
 
@@ -48,9 +48,9 @@ export const getDebtRecap = async (req, res) => {
       if (!debtMap[key]) {
         debtMap[key] = {
           debtor_id,
-          debtor_name: split.profiles?.full_name || split.profiles?.username,
+          debtor_name: split.member?.full_name || split.member?.username || 'Unknown',
           creditor_id,
-          creditor_name: bill.profiles?.full_name || bill.profiles?.username,
+          creditor_name: bill.payer?.full_name || bill.payer?.username || 'Unknown',
           total_debt: 0,
           transactions: []
         };

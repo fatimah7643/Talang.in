@@ -18,9 +18,10 @@ const logActivity = async (group_id, actor_id, action_type, description, metadat
 // POST /api/v1/bills/split
 export const splitBill = async (req, res) => {
   try {
-    const { group_id, payer_id, amount, description, category, splits } = req.body;
+    const { group_id, payer_id, amount, description, title, category, splits } = req.body;
+    const billDescription = description || title; // ← handle keduanya
 
-    if (!group_id || !payer_id || !amount || !description || !splits || !Array.isArray(splits) || splits.length === 0) {
+    if (!group_id || !payer_id || !amount || !billDescription || !splits || !Array.isArray(splits) || splits.length === 0) {
       return res.status(400).json({
         success: false,
         message: "group_id, payer_id, amount, description, dan splits (array) wajib diisi!"
@@ -41,7 +42,7 @@ export const splitBill = async (req, res) => {
 
     const { data: billData, error: billError } = await supabase
       .from('bills')
-      .insert([{ group_id, payer_id, amount: Number(amount), description, category: category || 'Lainnya' }])
+      .insert([{ group_id, payer_id, amount: Number(amount), description: billDescription, category: category || 'Lainnya' }])
       .select();
 
     if (billError) throw billError;
@@ -66,7 +67,7 @@ export const splitBill = async (req, res) => {
 
     await logActivity(
       group_id, payer_id, 'BILL_CREATED',
-      `Tagihan baru: "${description}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`,
+      `Tagihan baru: "${billDescription}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`,
       { bill_id: bill.id, amount, category, split_count: nonPayerSplits.length }
     );
 
