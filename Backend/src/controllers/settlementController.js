@@ -26,7 +26,7 @@ export const getDebtRecap = async (req, res) => {
 
     const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
-      .select('id, bill_id, share_amount, amount_paid, is_paid, member:profiles!bill_splits_member_id_fkey(username, full_name)')
+      .select('id, member_id, bill_id, share_amount, amount_paid, is_paid, member:profiles!bill_splits_member_id_fkey(username, full_name)')
       .in('bill_id', billIds)
       .eq('is_paid', false);
 
