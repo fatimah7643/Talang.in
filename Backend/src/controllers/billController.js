@@ -18,7 +18,6 @@ const logActivity = async (group_id, actor_id, action_type, description, metadat
 // POST /api/v1/bills/split
 export const splitBill = async (req, res) => {
   try {
-    // ✅ FIX BUG 1: destrukturisasi diperbaiki, payer_id sekarang terdefinisi
     const { group_id, payer_id, amount, description, category, splits } = req.body;
 
     if (!group_id || !payer_id || !amount || !description || !splits || !Array.isArray(splits) || splits.length === 0) {
@@ -28,11 +27,15 @@ export const splitBill = async (req, res) => {
       });
     }
 
-    const totalSplits = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
-    if (Math.abs(totalSplits - Number(amount)) > 1) {
+    // ✅ Hitung total split tanpa payer (payer tidak berhutang ke dirinya sendiri)
+    const nonPayerSplits = splits.filter(s => s.member_id !== payer_id);
+    const totalSplits = nonPayerSplits.reduce((sum, s) => sum + Number(s.share_amount), 0);
+    const totalAll = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
+
+    if (Math.abs(totalAll - Number(amount)) > 1) {
       return res.status(400).json({
         success: false,
-        message: `Total split (${totalSplits}) tidak sesuai dengan total amount (${amount})!`
+        message: `Total split (${totalAll}) tidak sesuai dengan total amount (${amount})!`
       });
     }
 
@@ -45,7 +48,8 @@ export const splitBill = async (req, res) => {
 
     const bill = billData[0];
 
-    const splitRows = splits.map(s => ({
+    // ✅ Filter payer dari splitRows supaya payer tidak jadi debtor ke dirinya sendiri
+    const splitRows = nonPayerSplits.map(s => ({
       bill_id: bill.id,
       member_id: s.member_id,
       share_amount: Number(s.share_amount),
@@ -62,8 +66,8 @@ export const splitBill = async (req, res) => {
 
     await logActivity(
       group_id, payer_id, 'BILL_CREATED',
-      `Tagihan baru: "${description}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${splits.length} anggota.`,
-      { bill_id: bill.id, amount, category, split_count: splits.length }
+      `Tagihan baru: "${description}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`,
+      { bill_id: bill.id, amount, category, split_count: nonPayerSplits.length }
     );
 
     return res.status(201).json({
@@ -205,7 +209,6 @@ export const splitBillNLP = async (req, res) => {
 
     // ── STEP 3: Simpan ke Database ──────────────────────────────
 
-    // Cari payer_id
     const { data: payerProfile, error: payerError } = await supabase
       .from('profiles')
       .select('id')
@@ -220,7 +223,6 @@ export const splitBillNLP = async (req, res) => {
       });
     }
 
-    // Simpan bill
     const { data: billData, error: billError } = await supabase
       .from('bills')
       .insert([{
@@ -235,7 +237,6 @@ export const splitBillNLP = async (req, res) => {
     if (billError) throw billError;
     const bill = billData[0];
 
-    // Simpan splits
     const splitRows = [];
     for (const participant of finalParticipants) {
       const { data: profile } = await supabase
@@ -255,7 +256,7 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    // ✅ FIX BUG 2: filter payer dari splitRows supaya payer tidak masuk sebagai debtor
+    // ✅ Filter payer dari splitRows supaya payer tidak jadi debtor ke dirinya sendiri
     const filteredSplitRows = splitRows.filter(s => s.member_id !== payerProfile.id);
 
     if (filteredSplitRows.length > 0) {
@@ -265,7 +266,6 @@ export const splitBillNLP = async (req, res) => {
       if (splitError) throw splitError;
     }
 
-    // ── STEP 4: Response ────────────────────────────────────────
     return res.status(201).json({
       success: true,
       message: "Tagihan berhasil dibuat via AI Smart Input! 🤖",
@@ -286,7 +286,7 @@ export const splitBillNLP = async (req, res) => {
         participants: finalParticipants
       },
       bill_summary: bill,
-      split_count: filteredSplitRows.length  // ✅ pakai filteredSplitRows
+      split_count: filteredSplitRows.length
     });
 
   } catch (error) {
