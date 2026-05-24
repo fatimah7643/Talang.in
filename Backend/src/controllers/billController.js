@@ -18,6 +18,7 @@ const logActivity = async (group_id, actor_id, action_type, description, metadat
 // POST /api/v1/bills/split
 export const splitBill = async (req, res) => {
   try {
+    // ✅ FIX BUG 1: destrukturisasi diperbaiki, payer_id sekarang terdefinisi
     const { group_id, payer_id, amount, description, category, splits } = req.body;
 
     if (!group_id || !payer_id || !amount || !description || !splits || !Array.isArray(splits) || splits.length === 0) {
@@ -93,7 +94,6 @@ const parseNominal = (str) => {
 
 // Helper: cari semua nominal dari raw_text menggunakan regex
 const extractAllNominalsFromText = (text) => {
-  // Pattern: angka diikuti k/rb/ribu/juta atau angka dengan titik/koma
   const pattern = /(\d+(?:[.,]\d+)*(?:k|rb|ribu|juta|jt)?)/gi;
   const matches = text.match(pattern) || [];
   return matches.map(m => parseNominal(m)).filter(n => n > 0);
@@ -133,13 +133,10 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
     const entities = aiResult.rawEntities || [];
 
-    // 2a. Bangun map PERSON → PRICE dari rawEntities
-    // Pasangkan setiap PERSON dengan PRICE terdekat setelahnya
     const personAmountMap = {};
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].label === 'PERSON') {
         const personName = entities[i].text;
-        // Cari PRICE berikutnya
         for (let j = i + 1; j < entities.length; j++) {
           if (entities[j].label === 'PRICE') {
             personAmountMap[personName] = parseNominal(entities[j].text);
@@ -150,39 +147,25 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    // 2b. Cari total utama dari raw_text menggunakan regex
-    // Ambil semua nominal dari teks, lalu total = nominal terbesar
     const allNominals = extractAllNominalsFromText(raw_text);
     const maxNominal = allNominals.length > 0 ? Math.max(...allNominals) : 0;
-
-    // Total yang benar:
-    // - Kalau ada nominal lebih besar dari aiResult.amount → pakai itu
-    // - Kalau tidak → pakai aiResult.amount
     const correctedAmount = maxNominal > aiResult.amount ? maxNominal : aiResult.amount;
 
-    // 2c. Tentukan split method
-    // Custom split = ada PERSON dengan PRICE spesifik di rawEntities
     const hasPersonSpecificAmounts = Object.keys(personAmountMap).length > 0;
     const isCustomSplit = hasPersonSpecificAmounts;
 
-    // 2d. Bangun participants yang benar
     let finalParticipants = [];
     let finalSplitMethod = 'equal';
 
     if (isCustomSplit) {
       finalSplitMethod = 'custom';
 
-      // Hitung total yang sudah diketahui dari personAmountMap
       const knownTotal = Object.values(personAmountMap).reduce((sum, v) => sum + v, 0);
-
-      // Sisa untuk payer (yang tidak punya PRICE di rawEntities)
       const payer = aiResult.paidBy;
       const payerHasAmount = personAmountMap.hasOwnProperty(payer);
       const remainder = correctedAmount - knownTotal;
 
-      // Bangun participants dari semua group_members
       finalParticipants = group_members.map(name => {
-        // Cari di personAmountMap (case-insensitive)
         const matchedKey = Object.keys(personAmountMap).find(
           k => k.toLowerCase() === name.toLowerCase()
         );
@@ -191,20 +174,16 @@ export const splitBillNLP = async (req, res) => {
           return { name, amount: personAmountMap[matchedKey] };
         }
 
-        // Kalau payer tidak punya amount → dapat sisa
         if (name.toLowerCase() === payer?.toLowerCase() && !payerHasAmount && remainder > 0) {
           return { name, amount: remainder };
         }
 
-        // Default: 0 (tidak terlibat atau tidak terdeteksi)
         return { name, amount: 0 };
       }).filter(p => p.amount > 0);
 
-      // Validasi: total finalParticipants harus = correctedAmount
       const totalCheck = finalParticipants.reduce((sum, p) => sum + p.amount, 0);
       const diff = Math.abs(totalCheck - correctedAmount);
 
-      // Kalau masih selisih > 1000, fallback equal
       if (diff > 1000) {
         finalSplitMethod = 'equal';
         const equalShare = Math.floor(correctedAmount / group_members.length);
@@ -215,7 +194,6 @@ export const splitBillNLP = async (req, res) => {
         }));
       }
     } else {
-      // Equal split
       finalSplitMethod = 'equal';
       const equalShare = Math.floor(correctedAmount / group_members.length);
       const rem = correctedAmount - (equalShare * group_members.length);
@@ -277,10 +255,13 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    if (splitRows.length > 0) {
+    // ✅ FIX BUG 2: filter payer dari splitRows supaya payer tidak masuk sebagai debtor
+    const filteredSplitRows = splitRows.filter(s => s.member_id !== payerProfile.id);
+
+    if (filteredSplitRows.length > 0) {
       const { error: splitError } = await supabase
         .from('bill_splits')
-        .insert(splitRows);
+        .insert(filteredSplitRows);
       if (splitError) throw splitError;
     }
 
@@ -305,7 +286,7 @@ export const splitBillNLP = async (req, res) => {
         participants: finalParticipants
       },
       bill_summary: bill,
-      split_count: splitRows.length
+      split_count: filteredSplitRows.length  // ✅ pakai filteredSplitRows
     });
 
   } catch (error) {
@@ -346,7 +327,7 @@ export const getBillDetail = async (req, res) => {
     const { data, error } = await supabase
       .from('bills')
       .select('*')
-      .eq('id', bill_id);  // hapus .single()
+      .eq('id', bill_id);
 
     if (error) throw error;
 
@@ -356,7 +337,7 @@ export const getBillDetail = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: data[0]  // ambil index pertama
+      data: data[0]
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -368,7 +349,6 @@ export const getBillSplits = async (req, res) => {
   try {
     const { bill_id } = req.params;
 
-    // Step 1: ambil splits dulu
     const { data: splits, error } = await supabase
       .from('bill_splits')
       .select('id, bill_id, member_id, share_amount, amount_paid, is_paid')
@@ -379,7 +359,6 @@ export const getBillSplits = async (req, res) => {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    // Step 2: ambil nama member dari profiles
     const memberIds = splits.map(s => s.member_id);
     const { data: profiles } = await supabase
       .from('profiles')
@@ -391,7 +370,6 @@ export const getBillSplits = async (req, res) => {
       profileMap[p.id] = p.full_name || p.username || '—';
     });
 
-    // Step 3: gabungkan
     const normalized = splits.map(s => ({
       ...s,
       member_name: profileMap[s.member_id] || '—',
