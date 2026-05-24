@@ -1,121 +1,91 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { ToastProvider } from './context/ToastContext'
+import ProtectedRoute from './components/ProtectedRoute'
+import Layout from './components/Layout'
 
-function App() {
-  const [count, setCount] = useState(0)
+import LandingPage from './pages/LandingPage'
+import Login from './pages/auth/Login'
+import Register from './pages/auth/Register'
+import Dashboard from './pages/dashboard/Dashboard'
+import Grup from './pages/grup/Grup'
+import Transaksi from './pages/transaksi/Transaksi'
+import Analytics from './pages/analytics/Analytics'
+import Profil from './pages/profil/Profil'
+import BalancePage from './pages/balance/BalancePage'
+import Notifikasi from './pages/notifikasi/Notifikasi'
+import Riwayat from './pages/riwayat/Riwayat'
+import SimplifyDebt from './pages/simplify/SimplifyDebt'
+import SyaratKetentuan from './pages/legal/SyaratKetentuan'
+import KebijakanPrivasi from './pages/legal/KebijakanPrivasi'
 
+const App = () => {
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <AuthProvider>
+      <ToastProvider>
+      <BrowserRouter>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-      <div className="ticks"></div>
+          {/* Protected routes dengan Layout */}
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <Layout><Dashboard /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/grup" element={
+            <ProtectedRoute>
+              <Layout><Grup /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/transaksi" element={
+            <ProtectedRoute>
+              <Layout><Transaksi /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <Layout><Analytics /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/profil" element={
+            <ProtectedRoute>
+              <Layout><Profil /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/balance" element={
+            <ProtectedRoute>
+              <Layout><BalancePage /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/notifikasi" element={
+            <ProtectedRoute>
+              <Layout><Notifikasi /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/riwayat" element={
+            <ProtectedRoute>
+              <Layout><Riwayat /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/simplify" element={
+            <ProtectedRoute>
+              <Layout><SimplifyDebt /></Layout>
+            </ProtectedRoute>
+          } />
+          {/* Legal — public */}
+          <Route path="/syarat-ketentuan"  element={<SyaratKetentuan />} />
+          <Route path="/kebijakan-privasi" element={<KebijakanPrivasi />} />
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+      </ToastProvider>
+    </AuthProvider>
   )
 }
 
