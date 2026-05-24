@@ -368,34 +368,36 @@ export const getBillSplits = async (req, res) => {
   try {
     const { bill_id } = req.params;
 
-    const { data, error } = await supabase
+    // Step 1: ambil splits dulu
+    const { data: splits, error } = await supabase
       .from('bill_splits')
-      .select(`
-        id,
-        bill_id,
-        member_id,
-        share_amount,
-        amount_paid,
-        is_paid,
-        profiles!member_id (
-          full_name,
-          username
-        )
-      `)
+      .select('id, bill_id, member_id, share_amount, amount_paid, is_paid')
       .eq('bill_id', bill_id);
 
     if (error) throw error;
+    if (!splits || splits.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
 
-    // Normalize: angkat nama ke level atas supaya frontend mudah akses
-    const normalized = data.map(s => ({
-      ...s,
-      member_name: s.profiles?.full_name || s.profiles?.username || '—',
-    }))
+    // Step 2: ambil nama member dari profiles
+    const memberIds = splits.map(s => s.member_id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, username')
+      .in('id', memberIds);
 
-    return res.status(200).json({
-      success: true,
-      data: normalized
+    const profileMap = {};
+    (profiles || []).forEach(p => {
+      profileMap[p.id] = p.full_name || p.username || '—';
     });
+
+    // Step 3: gabungkan
+    const normalized = splits.map(s => ({
+      ...s,
+      member_name: profileMap[s.member_id] || '—',
+    }));
+
+    return res.status(200).json({ success: true, data: normalized });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
