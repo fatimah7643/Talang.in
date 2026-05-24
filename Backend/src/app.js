@@ -10,6 +10,7 @@ import groupRoutes from './routes/groupRoutes.js';
 import billRoutes from './routes/billRoutes.js';
 import settlementRoutes from './routes/settlementRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
 const app = express();
 
@@ -27,7 +28,8 @@ app.get('/', (req, res) => {
       '/api/v1/groups',
       '/api/v1/bills',
       '/api/v1/settlements',
-      '/api/v1/analytics'
+      '/api/v1/analytics',
+      '/api/v1/notifications'
     ]
   });
 });
@@ -38,6 +40,7 @@ app.use('/api/v1/groups', groupRoutes);
 app.use('/api/v1/bills', billRoutes);
 app.use('/api/v1/settlements', settlementRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
