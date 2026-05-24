@@ -370,14 +370,31 @@ export const getBillSplits = async (req, res) => {
 
     const { data, error } = await supabase
       .from('bill_splits')
-      .select('*')
+      .select(`
+        id,
+        bill_id,
+        member_id,
+        share_amount,
+        amount_paid,
+        is_paid,
+        profiles!member_id (
+          full_name,
+          username
+        )
+      `)
       .eq('bill_id', bill_id);
 
     if (error) throw error;
 
+    // Normalize: angkat nama ke level atas supaya frontend mudah akses
+    const normalized = data.map(s => ({
+      ...s,
+      member_name: s.profiles?.full_name || s.profiles?.username || '—',
+    }))
+
     return res.status(200).json({
       success: true,
-      data
+      data: normalized
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
