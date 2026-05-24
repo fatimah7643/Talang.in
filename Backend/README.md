@@ -137,7 +137,7 @@ Authorization: Bearer <access_token>
 | Method | Endpoint | Deskripsi | Auth |
 |--------|----------|-----------|------|
 | POST | `/split` | Membuat tagihan baru dan membagi pengeluaran | ✅ |
-| POST | `/split-nlp` | Membuat tagihan menggunakan input teks natural (NLP) | ✅ |
+| POST | `/split-nlp` | Membuat tagihan menggunakan input teks natural (AI Smart Input) | ✅ |
 | GET | `/detail/:bill_id` | Mendapatkan detail tagihan | ✅ |
 | GET | `/:group_id/history` | Mendapatkan riwayat tagihan dalam suatu grup | ✅ |
 | GET | `/:bill_id/splits` | Mendapatkan rincian pembagian tagihan | ✅ |
@@ -159,6 +159,24 @@ Authorization: Bearer <access_token>
 }
 ```
 
+**Body Split Bill NLP (Smart Input):**
+```json
+{
+  "group_id": "uuid-grup",
+  "raw_text": "Makan siang bareng @budi dan @iwan total 150rb, budi bayar 100k, iwan 50k",
+  "group_members": ["budi", "iwan", "eko"]
+}
+```
+
+**Body Update Bill:**
+```json
+{
+  "amount": 200000,
+  "description": "Makan Malam Mewah",
+  "category": "Hiburan"
+}
+```
+
 ---
 
 ### 💸 Settlements (`/api/v1/settlements`)
@@ -166,7 +184,7 @@ Authorization: Bearer <access_token>
 | Method | Endpoint | Deskripsi | Auth |
 |--------|----------|-----------|------|
 | GET | `/:group_id/recap` | Mendapatkan rekapitulasi utang-piutang grup | ✅ |
-| GET | `/:group_id/simplify` | Mendapatkan saran penyederhanaan utang | ✅ |
+| GET | `/:group_id/simplify` | Mendapatkan saran penyederhanaan utang (Simplify Debt) | ✅ |
 | PUT | `/splits/:split_id/pay` | Menandai pembayaran (partial/full) | ✅ |
 
 **Body Pay (Partial):**
@@ -191,7 +209,7 @@ Authorization: Bearer <access_token>
 | Method | Endpoint | Deskripsi | Auth |
 |--------|----------|-----------|------|
 | GET | `/:group_id/health` | Mendapatkan skor kesehatan keuangan grup | ✅ |
-| GET | `/:group_id/conflicts` | Mendapatkan daftar potensi konflik keuangan | ✅ |
+| GET | `/:group_id/conflicts` | Mendapatkan daftar potensi konflik keuangan (AI Sensor) | ✅ |
 | GET | `/:group_id/conflict-status` | Mendapatkan ringkasan status konflik | ✅ |
 | GET | `/:group_id/dashboard` | Mendapatkan data dashboard analitik grup | ✅ |
 
@@ -202,26 +220,29 @@ Authorization: Bearer <access_token>
 ```
 Backend/
 ├── src/
+│   ├── config/
 │   ├── controllers/
+│   │   ├── analyticsController.js
 │   │   ├── authController.js
-│   │   ├── profileController.js
-│   │   ├── groupController.js
 │   │   ├── billController.js
-│   │   ├── settlementController.js
-│   │   └── analyticsController.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── profileRoutes.js
-│   │   ├── groupRoutes.js
-│   │   ├── billRoutes.js
-│   │   ├── settlementRoutes.js
-│   │   └── analyticsRoutes.js
+│   │   ├── groupController.js
+│   │   ├── profileController.js
+│   │   └── settlementController.js
+│   ├── helpers/
+│   │   └── activityLogHelper.js
 │   ├── middlewares/
 │   │   └── authMiddleware.js
+│   ├── routes/
+│   │   ├── analyticsRoutes.js
+│   │   ├── authRoutes.js
+│   │   ├── billRoutes.js
+│   │   ├── groupRoutes.js
+│   │   ├── profileRoutes.js
+│   │   └── settlementRoutes.js
 │   └── app.js
-├── .env
 ├── .env.example
 ├── package.json
+├── README.md
 └── server.js
 ```
 

@@ -252,3 +252,47 @@ export const getGroupsByUser = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// POST /api/v1/groups/add-member-by-username
+export const addMemberByUsername = async (req, res) => {
+  try {
+    const { group_id, username } = req.body
+    if (!group_id || !username) {
+      return res.status(400).json({ success: false, message: 'group_id dan username wajib diisi!' })
+    }
+
+    // Cari profile_id berdasarkan username
+    const { data: profile, error: findError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .single()
+
+    if (findError || !profile) {
+      return res.status(404).json({ success: false, message: 'Username tidak ditemukan!' })
+    }
+
+    // Cek sudah member?
+    const { data: existing } = await supabase
+      .from('group_members')
+      .select('id')
+      .eq('group_id', group_id)
+      .eq('profile_id', profile.id)
+      .single()
+
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'User ini sudah ada di grup!' })
+    }
+
+    const { data, error } = await supabase
+      .from('group_members')
+      .insert([{ group_id, profile_id: profile.id, role: 'member' }])
+      .select()
+
+    if (error) throw error
+
+    return res.status(201).json({ success: true, message: 'Anggota berhasil ditambahkan! 👋', data: data[0] })
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+};
