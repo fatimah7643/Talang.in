@@ -10,7 +10,6 @@ export const getDebtRecap = async (req, res) => {
   try {
     const { group_id } = req.params;
 
-    // ✅ Step 1: ambil semua bill_id yang masuk grup ini dulu
     const { data: bills, error: billsError } = await supabase
       .from('bills')
       .select('id, payer_id, description, category, profiles!payer_id(username, full_name)')
@@ -25,7 +24,6 @@ export const getDebtRecap = async (req, res) => {
     const billMap = {};
     bills.forEach(b => { billMap[b.id] = b; });
 
-    // ✅ Step 2: ambil splits berdasarkan bill_id yang sudah difilter
     const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
       .select('id, bill_id, member_id, share_amount, amount_paid, is_paid, profiles!member_id(username, full_name)')
@@ -83,35 +81,47 @@ export const getDebtRecap = async (req, res) => {
 };
 
 // GET /api/v1/settlements/:group_id/simplify
-// Algoritma Simplify Debt berbasis net balance (greedy graph reduction)
 export const simplifyDebt = async (req, res) => {
   try {
     const { group_id } = req.params;
 
-    // Ambil semua split yang belum lunas
-    const { data, error } = await supabase
+    // ✅ Step 1: ambil bills dulu by group_id
+    const { data: bills, error: billsError } = await supabase
+      .from('bills')
+      .select('id, payer_id')
+      .eq('group_id', group_id);
+
+    if (billsError) throw billsError;
+    if (!bills || bills.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Tidak ada tagihan di grup ini.",
+        group_id,
+        original_entries: 0,
+        simplified_transactions: 0,
+        data: []
+      });
+    }
+
+    const billIds = bills.map(b => b.id);
+    const billMap = {};
+    bills.forEach(b => { billMap[b.id] = b; });
+
+    // ✅ Step 2: ambil splits berdasarkan bill_id
+    const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
-      .select(`
-        member_id,
-        share_amount,
-        amount_paid,
-        is_paid,
-        bills!bill_id (
-          payer_id,
-          group_id
-        )
-      `)
-      .eq('bills.group_id', group_id)
+      .select('member_id, bill_id, share_amount, amount_paid, is_paid')
+      .in('bill_id', billIds)
       .eq('is_paid', false);
 
-    if (error) throw error;
+    if (splitsError) throw splitsError;
 
     // Hitung net balance tiap anggota (positif = piutang, negatif = hutang)
     const balance = {};
 
-    data.forEach(split => {
+    (splits || []).forEach(split => {
       const debtor = split.member_id;
-      const creditor = split.bills?.payer_id;
+      const creditor = billMap[split.bill_id]?.payer_id;
       if (!creditor || debtor === creditor) return;
 
       const remaining = Number(split.share_amount) - Number(split.amount_paid);
@@ -121,8 +131,18 @@ export const simplifyDebt = async (req, res) => {
       balance[creditor] = (balance[creditor] || 0) + remaining;
     });
 
-    // Ambil profil semua anggota untuk nama
     const memberIds = Object.keys(balance);
+    if (memberIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Semua hutang sudah lunas!",
+        group_id,
+        original_entries: splits?.length || 0,
+        simplified_transactions: 0,
+        data: []
+      });
+    }
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, username, full_name')
@@ -131,7 +151,7 @@ export const simplifyDebt = async (req, res) => {
     const profileMap = {};
     (profiles || []).forEach(p => { profileMap[p.id] = p.full_name || p.username; });
 
-    // Greedy algorithm: pasangkan debitur terbesar dengan kreditur terbesar
+    // Greedy algorithm
     const debtors = Object.entries(balance)
       .filter(([, v]) => v < 0)
       .map(([id, v]) => ({ id, amount: Math.abs(v) }))
@@ -169,7 +189,7 @@ export const simplifyDebt = async (req, res) => {
       success: true,
       message: `Utang berhasil disederhanakan menjadi ${transactions.length} transfer minimal.`,
       group_id,
-      original_entries: data.length,
+      original_entries: splits?.length || 0,
       simplified_transactions: transactions.length,
       data: transactions
     });
@@ -198,7 +218,6 @@ export const markAsPaid = async (req, res) => {
       });
     }
 
-    // Ambil data split saat ini
     const { data: split, error: findError } = await supabase
       .from('bill_splits')
       .select('id, share_amount, amount_paid, is_paid')
@@ -217,17 +236,11 @@ export const markAsPaid = async (req, res) => {
     let new_is_paid;
 
     if (payment_type === 'full') {
-      // Bayar lunas: paksa amount_paid = share_amount
       new_amount_paid = Number(split.share_amount);
       new_is_paid = true;
     } else {
-      // Bayar sebagian: akumulasi cicilan
       new_amount_paid = Number(split.amount_paid) + Number(amount);
-
-      // Jika cicilan sudah menyentuh atau melebihi target, otomatis lunas
       new_is_paid = new_amount_paid >= Number(split.share_amount);
-
-      // Tidak boleh overpay
       if (new_amount_paid > Number(split.share_amount)) {
         new_amount_paid = Number(split.share_amount);
       }
