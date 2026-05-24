@@ -10,44 +10,37 @@ export const getDebtRecap = async (req, res) => {
   try {
     const { group_id } = req.params;
 
-    // Ambil semua split yang belum lunas beserta info bill dan member
-    const { data, error } = await supabase
+    // ✅ Step 1: ambil semua bill_id yang masuk grup ini dulu
+    const { data: bills, error: billsError } = await supabase
+      .from('bills')
+      .select('id, payer_id, description, category, profiles!payer_id(username, full_name)')
+      .eq('group_id', group_id);
+
+    if (billsError) throw billsError;
+    if (!bills || bills.length === 0) {
+      return res.status(200).json({ success: true, message: "Tidak ada tagihan.", group_id, total_debt_entries: 0, data: [] });
+    }
+
+    const billIds = bills.map(b => b.id);
+    const billMap = {};
+    bills.forEach(b => { billMap[b.id] = b; });
+
+    // ✅ Step 2: ambil splits berdasarkan bill_id yang sudah difilter
+    const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
-      .select(`
-        id,
-        member_id,
-        share_amount,
-        amount_paid,
-        is_paid,
-        bills!bill_id (
-          id,
-          payer_id,
-          description,
-          category,
-          group_id,
-          profiles!payer_id (
-            username,
-            full_name
-          )
-        ),
-        profiles!member_id (
-          username,
-          full_name
-        )
-      `)
-      .eq('bills.group_id', group_id)
+      .select('id, bill_id, member_id, share_amount, amount_paid, is_paid, profiles!member_id(username, full_name)')
+      .in('bill_id', billIds)
       .eq('is_paid', false);
 
-    if (error) throw error;
+    if (splitsError) throw splitsError;
 
-    // Susun rekap: siapa berhutang kepada siapa dan berapa
     const debtMap = {};
 
-    data.forEach(split => {
+    (splits || []).forEach(split => {
       const debtor_id = split.member_id;
-      const creditor_id = split.bills?.payer_id;
+      const bill = billMap[split.bill_id];
+      const creditor_id = bill?.payer_id;
 
-      // Pembayar tidak berhutang ke dirinya sendiri
       if (!creditor_id || debtor_id === creditor_id) return;
 
       const remaining = Number(split.share_amount) - Number(split.amount_paid);
@@ -59,7 +52,7 @@ export const getDebtRecap = async (req, res) => {
           debtor_id,
           debtor_name: split.profiles?.full_name || split.profiles?.username,
           creditor_id,
-          creditor_name: split.bills?.profiles?.full_name || split.bills?.profiles?.username,
+          creditor_name: bill.profiles?.full_name || bill.profiles?.username,
           total_debt: 0,
           transactions: []
         };
@@ -68,7 +61,7 @@ export const getDebtRecap = async (req, res) => {
       debtMap[key].total_debt += remaining;
       debtMap[key].transactions.push({
         split_id: split.id,
-        bill_description: split.bills?.description,
+        bill_description: bill.description,
         share_amount: split.share_amount,
         amount_paid: split.amount_paid,
         remaining_debt: remaining
