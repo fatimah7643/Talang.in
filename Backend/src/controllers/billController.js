@@ -230,7 +230,9 @@ export const splitBillNLP = async (req, res) => {
         group_id,
         payer_id: payerProfile.id,
         amount: correctedAmount,
-        description: aiResult.title,
+        description: (aiResult.title && aiResult.title !== 'Transaksi AI' && aiResult.title !== 'Unknown')
+          ? aiResult.title
+          : raw_text.slice(0, 50),
         category: aiResult.category || 'Lainnya'
       }])
       .select();
@@ -302,18 +304,24 @@ export const getBillHistory = async (req, res) => {
 
     const { data, error } = await supabase
       .from('bills')
-      .select('*')
+      .select('*, payer:profiles!bills_payer_id_fkey(full_name, username)')
       .eq('group_id', group_id)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
 
+    const mapped = (data || []).map(b => ({
+      ...b,
+      paid_by_name: b.payer?.full_name || b.payer?.username || '—',
+    }))
+
+
     return res.status(200).json({
       success: true,
       message: "Riwayat transaksi grup berhasil dimuat.",
       group_id,
-      total_bills: data.length,
-      data
+      total_bills: mapped.length,
+      data: mapped
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
