@@ -213,7 +213,7 @@ export const splitBillNLP = async (req, res) => {
     const { data: payerProfile, error: payerError } = await supabase
       .from('profiles')
       .select('id')
-      .ilike('username', aiResult.paidBy)
+      .or(`username.ilike.%${aiResult.paidBy}%,full_name.ilike.%${aiResult.paidBy}%`)
       .single();
 
     if (payerError || !payerProfile) {
@@ -243,7 +243,7 @@ export const splitBillNLP = async (req, res) => {
       const { data: profile } = await supabase
         .from('profiles')
         .select('id')
-        .ilike('username', participant.name)
+        .or(`username.ilike.%${participant.name}%,full_name.ilike.%${participant.name}%`)
         .single();
 
       if (profile) {
