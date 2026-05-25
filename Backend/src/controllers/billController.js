@@ -32,11 +32,10 @@ export const splitBill = async (req, res) => {
 
     const nonPayerSplits = splits.filter(s => s.member_id !== payer_id);
     const totalAll = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
-
-    if (Math.abs(totalAll - Number(amount)) > 1) {
+    if (totalAll > Number(amount) + 1) {
       return res.status(400).json({
         success: false,
-        message: `Total split (${totalAll}) tidak sesuai dengan total amount (${amount})!`
+        message: `Total split (${totalAll}) melebihi total amount (${amount})!`
       });
     }
 
