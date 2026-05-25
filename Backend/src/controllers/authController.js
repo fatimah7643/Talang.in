@@ -84,3 +84,73 @@ export const login = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Login With GOOGLE
+// GET /api/v1/auth/google
+export const googleLogin = async (req, res) => {
+  try {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // Arahkan Google balik ke endpoint callback di Railway ini
+        redirectTo: 'https://talangin-production.up.railway.app/api/v1/auth/google/callback',
+      },
+    });
+
+    if (error) throw error;
+
+    // Alihkan browser user ke halaman pemilihan akun Google
+    return res.redirect(data.url);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// GET /api/v1/auth/google/callback
+export const googleCallback = async (req, res) => {
+  const { code } = req.query;
+
+  // Jika code tidak dikirim oleh Google, balikkan ke frontend dengan pesan error
+  if (!code) {
+    return res.redirect('http://localhost:5173/login?error=no_code_from_google');
+  }
+
+  try {
+    // Tukar kode OAuth dari Google menjadi session Supabase resmi
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+
+    const session = data.session;
+    const user = data.user;
+
+    // Cek apakah profile user ini sudah ada di tabel 'profiles'
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    // SINKRONISASI OTOMATIS: Jika profil belum ada, daftarkan otomatis (fitur Register via Google)
+    if (!existingProfile) {
+      const rawName = user.user_metadata.full_name || user.user_metadata.name || 'Google User';
+      const generatedUsername = user.email.split('@')[0] + '_' + Math.floor(1000 + Math.random() * 9000);
+
+      await supabase
+        .from('profiles')
+        .insert([{
+          id: user.id,
+          full_name: rawName,
+          username: generatedUsername.toLowerCase()
+        }]);
+    }
+
+    // Ambil data user yang diperlukan untuk dikirim ke frontend
+    const userData = encodeURIComponent(JSON.stringify({ id: user.id, email: user.email }));
+    
+    // Alihkan user ke frontend localhost sambil membawa token & data user di URL query
+    return res.redirect(`http://localhost:5173/dashboard?token=${session.access_token}&user=${userData}`);
+  } catch (error) {
+    console.error("OAuth Callback Error:", error.message);
+    return res.redirect('http://localhost:5173/login?error=oauth_failed');
+  }
+};
