@@ -118,17 +118,21 @@ const extractShortTitle = (text) => {
 
 const extractPersonAmountsFromText = (text, knownMembers) => {
   const result = {};
+
   for (const member of knownMembers) {
     const firstName = member.split(' ')[0];
+
     const pattern = new RegExp(
-      `(?:bagian\\s+)?${firstName}[:\\s]+(?:sebesar\\s+)?(\\d+(?:[.,]\\d+)*(?:k|rb|ribu|juta|jt)?)`,
-      'gi'
+      `(?:bagian\\s+)?${firstName}\\s*(?:[:=-]?\\s*)?(?:sebesar\\s+)?(\\d+(?:[.,]\\d+)*(?:k|rb|ribu|juta|jt)?)`,
+      'i'
     );
     const match = pattern.exec(text);
-    if (match) {
+
+    if (match && match[1]) {
       result[firstName] = parseNominal(match[1]);
     }
   }
+  
   return result;
 };
 
