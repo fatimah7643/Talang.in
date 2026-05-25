@@ -298,31 +298,19 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
         // Berdasarkan share tiap member dibanding total share non-payer
         let splitsPayload = []
 
-        if (form.split_method === 'equal') {
-          // Rata: tiap debtor hutang = payerAmount / jumlah debtor
-          const each = Math.floor(payerAmount / debtors.length)
-          const rem  = payerAmount - each * debtors.length
-          splitsPayload = debtors.map((m, idx) => ({
-            member_id:    m.id,
-            share_amount: idx === 0 ? each + rem : each,
-          }))
-        } else {
-          // Custom/persentase: proporsional berdasarkan share masing-masing
-          const totalDebtorShare = debtors.reduce((sum, m) => sum + (memberShareMap[m.id] || 0), 0)
-          splitsPayload = debtors.map(m => ({
-            member_id:    m.id,
-            share_amount: totalDebtorShare > 0
-              ? Math.round(payerAmount * (memberShareMap[m.id] / totalDebtorShare))
-              : 0,
-          })).filter(s => s.share_amount > 0)
-        }
+        // memberShareMap langsung
+        splitsPayload = debtors.map(m => ({
+          member_id:    m.id,
+          share_amount: memberShareMap[m.id] || 0,
+        })).filter(s => s.share_amount > 0)
 
         const payload = {
           group_id:    form.group_id,
           payer_id:    payer.member_id,
-          amount:      payerAmount,
+          amount:      totalAmount,
           description: form.title,
           category:    form.category,
+          split_method: form.split_method,
           splits:      splitsPayload,
         }
 
@@ -331,7 +319,7 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
         addedTrxs.push({
           id:           bill.id,
           title:        bill.description || form.title,
-          amount:       bill.amount      || payerAmount,
+          amount:       bill.amount      || totalAmount,
           category:     bill.category    || form.category,
           date:         bill.created_at  || form.date,
           status:       'pending',
@@ -716,17 +704,19 @@ function ModalNLP({ grups, onClose, onAdded }) {
     try {
       const group_members = members
         .filter(m => selected.includes(m.id))
-        .map(m => m.name)
+        .map(m => m.name.split(' ')[0]) // Kirim nama depan aja ke AI biar lebih akurat
       const res = await api.post('/bills/split-nlp', {
         group_id: grupId,
         raw_text: text,
         group_members,
       })
-      const bill    = res.data?.bill_summary || {}
+
+      const bill   = res.data?.bill_summary || res.data?.bill || res.data || {}
+      const billId = bill.id || res.data?.id || res.data?.bill_id
       const parsed  = res.data?.ai_parsed    || {}
       const grup    = grups.find(g => String(g.id) === String(grupId))
       const normalizedTrx = {
-        id:           bill.id,
+        id:           billId,
         title:        bill.description || parsed.title || 'Transaksi AI',
         amount:       bill.amount      || parsed.amount || 0,
         category:     bill.category    || parsed.category || 'Lainnya',
@@ -734,12 +724,8 @@ function ModalNLP({ grups, onClose, onAdded }) {
         status:       'pending',
         split_method: parsed.splitMethod || 'equal',
         group_name:   grup?.name || 'Tidak diketahui',
-        paid_by_name: parsed.paidBy || 'Tidak diketahui',
-        splits: (parsed.participants || []).map(p => ({
-          name:   p.name,
-          amount: p.amount,
-          status: 'pending',
-        })),
+        paid_by_name: parsed.paidBy || '—',
+        splits:       [],
       }
       onAdded(normalizedTrx)
       onClose()
