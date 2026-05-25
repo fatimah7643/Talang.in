@@ -15,7 +15,9 @@ const logActivity = async (group_id, actor_id, action_type, description, metadat
   }
 };
 
-// POST /api/v1/bills/split
+/* ═══════════════════════════════════════════════════════════════
+   POST /api/v1/bills/split
+═══════════════════════════════════════════════════════════════ */
 export const splitBill = async (req, res) => {
   try {
     const { group_id, payer_id, amount, description, title, category, splits } = req.body;
@@ -48,11 +50,11 @@ export const splitBill = async (req, res) => {
     const bill = billData[0];
 
     const splitRows = nonPayerSplits.map(s => ({
-      bill_id: bill.id,
-      member_id: s.member_id,
+      bill_id:      bill.id,
+      member_id:    s.member_id,
       share_amount: Number(s.share_amount),
-      amount_paid: 0,
-      is_paid: false
+      amount_paid:  0,
+      is_paid:      false
     }));
 
     const { data: splitData, error: splitError } = await supabase
@@ -79,31 +81,33 @@ export const splitBill = async (req, res) => {
   }
 };
 
-/* ─────────────────────── HELPERS NLP ───────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS — NLP
+═══════════════════════════════════════════════════════════════ */
 
-// Parse nominal dari string (handle "10k", "300ribu", "150.000", dll)
+// Parse nominal dari string: "10k" → 10000, "300ribu" → 300000, dll
 const parseNominal = (str) => {
   if (!str) return 0;
   const cleaned = str.toString().toLowerCase()
     .replace(/\./g, '')
     .replace(/,/g, '')
     .replace('ribu', '000')
-    .replace('rb', '000')
-    .replace('k', '000')
+    .replace('rb',   '000')
+    .replace('k',    '000')
     .replace('juta', '000000')
-    .replace('jt', '000000')
+    .replace('jt',   '000000')
     .trim();
   return parseInt(cleaned) || 0;
 };
 
-// Cari semua nominal dari raw_text menggunakan regex
+// Cari semua nominal dari teks
 const extractAllNominalsFromText = (text) => {
   const pattern = /(\d+(?:[.,]\d+)*(?:k|rb|ribu|juta|jt)?)/gi;
   const matches = text.match(pattern) || [];
   return matches.map(m => parseNominal(m)).filter(n => n > 0);
 };
 
-// Ekstrak nominal setelah kata "total" → misal "total 250000" → 250000
+// Ekstrak nominal setelah kata "total" → "total 250000" → 250000
 const extractExplicitTotal = (text) => {
   const pattern = /total\s+(\d+(?:[.,]\d+)*(?:k|rb|ribu|juta|jt)?)/gi;
   const match = pattern.exec(text);
@@ -111,12 +115,32 @@ const extractExplicitTotal = (text) => {
   return 0;
 };
 
-// Ambil judul singkat 4 kata pertama dari teks
+// Ambil 4 kata pertama sebagai judul singkat
 const extractShortTitle = (text) => {
   return text.trim().split(/\s+/).slice(0, 4).join(' ').replace(/[.,!?]+$/, '');
 };
 
-/* ─────────────────────── POST /api/v1/bills/split-nlp ──────────── */
+// Fallback: ekstrak pasangan nama→nominal langsung dari raw_text
+// Handle: "bagian Risna 100rb", "Risna 100rb", "Risna: 100.000"
+const extractPersonAmountsFromText = (text, knownMembers) => {
+  const result = {};
+  for (const member of knownMembers) {
+    const firstName = member.split(' ')[0];
+    const pattern = new RegExp(
+      `(?:bagian\\s+)?${firstName}[:\\s]+(?:sebesar\\s+)?(\\d+(?:[.,]\\d+)*(?:k|rb|ribu|juta|jt)?)`,
+      'gi'
+    );
+    const match = pattern.exec(text);
+    if (match) {
+      result[firstName] = parseNominal(match[1]);
+    }
+  }
+  return result;
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   POST /api/v1/bills/split-nlp
+═══════════════════════════════════════════════════════════════ */
 export const splitBillNLP = async (req, res) => {
   try {
     const { group_id, raw_text, group_members } = req.body;
@@ -150,7 +174,7 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
     const entities = aiResult.rawEntities || [];
 
-    // Bangun map: nama orang → nominal dari entitas AI
+    // Coba bangun personAmountMap dari rawEntities AI
     const personAmountMap = {};
     for (let i = 0; i < entities.length; i++) {
       if (entities[i].label === 'PERSON') {
@@ -165,10 +189,16 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    // ✅ FIX AMOUNT: prioritaskan "total X" dari teks, jangan percaya AI mentah
-    const allNominals    = extractAllNominalsFromText(raw_text);
-    const explicitTotal  = extractExplicitTotal(raw_text);
-    const maxNominal     = allNominals.length > 0 ? Math.max(...allNominals) : 0;
+    // ✅ Fallback: kalau AI tidak detect entitas, coba regex dari raw_text langsung
+    if (Object.keys(personAmountMap).length === 0) {
+      const fallback = extractPersonAmountsFromText(raw_text, group_members);
+      Object.assign(personAmountMap, fallback);
+    }
+
+    // ✅ FIX AMOUNT: prioritaskan "total X" dari teks
+    const allNominals   = extractAllNominalsFromText(raw_text);
+    const explicitTotal = extractExplicitTotal(raw_text);
+    const maxNominal    = allNominals.length > 0 ? Math.max(...allNominals) : 0;
 
     const correctedAmount = explicitTotal > 0
       ? explicitTotal
@@ -192,23 +222,31 @@ export const splitBillNLP = async (req, res) => {
       const remainder      = correctedAmount - knownTotal;
 
       finalParticipants = group_members.map(name => {
-        const matchedKey = Object.keys(personAmountMap).find(
-          k => k.toLowerCase() === name.toLowerCase()
+        // Cocokkan nama depan (case-insensitive)
+        const firstName   = name.split(' ')[0];
+        const matchedKey  = Object.keys(personAmountMap).find(
+          k => k.toLowerCase() === firstName.toLowerCase() ||
+               k.toLowerCase() === name.toLowerCase()
         );
 
         if (matchedKey) {
           return { name, amount: personAmountMap[matchedKey] };
         }
 
-        // Kalau payer tidak disebutkan nominalnya, berikan sisa (remainder)
-        if (name.toLowerCase() === payer?.toLowerCase() && !payerHasAmount && remainder > 0) {
+        // Kalau payer tidak punya nominal sendiri, beri sisa
+        if (
+          (name.toLowerCase() === payer?.toLowerCase() ||
+           firstName.toLowerCase() === payer?.toLowerCase()) &&
+          !payerHasAmount &&
+          remainder > 0
+        ) {
           return { name, amount: remainder };
         }
 
         return { name, amount: 0 };
       }).filter(p => p.amount > 0);
 
-      // Safety check: kalau total custom tidak cocok → fallback ke equal
+      // Safety: kalau total custom tidak match → fallback equal
       const totalCheck = finalParticipants.reduce((sum, p) => sum + p.amount, 0);
       const diff = Math.abs(totalCheck - correctedAmount);
 
@@ -248,7 +286,7 @@ export const splitBillNLP = async (req, res) => {
       });
     }
 
-    // ✅ FIX TITLE: pakai extractShortTitle kalau AI gagal detect judul
+    // ✅ FIX TITLE: pakai extractShortTitle kalau AI gagal
     const billTitle = (
       aiResult.title &&
       aiResult.title !== 'Transaksi AI' &&
@@ -272,7 +310,7 @@ export const splitBillNLP = async (req, res) => {
     if (billError) throw billError;
     const bill = billData[0];
 
-    // Cari member_id tiap participant lalu insert ke bill_splits
+    // Cari member_id tiap participant lalu susun splitRows
     const splitRows = [];
     for (const participant of finalParticipants) {
       const { data: profile } = await supabase
@@ -292,7 +330,7 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    // Filter payer dari splits (payer tidak hutang ke dirinya sendiri)
+    // Filter payer dari splits (payer tidak hutang ke diri sendiri)
     const filteredSplitRows = splitRows.filter(s => s.member_id !== payerProfile.id);
 
     if (filteredSplitRows.length > 0) {
@@ -330,7 +368,9 @@ export const splitBillNLP = async (req, res) => {
   }
 };
 
-/* ─────────────────────── GET /api/v1/bills/:group_id/history ───── */
+/* ═══════════════════════════════════════════════════════════════
+   GET /api/v1/bills/:group_id/history
+═══════════════════════════════════════════════════════════════ */
 export const getBillHistory = async (req, res) => {
   try {
     const { group_id } = req.params;
@@ -360,7 +400,9 @@ export const getBillHistory = async (req, res) => {
   }
 };
 
-/* ─────────────────────── GET /api/v1/bills/detail/:bill_id ─────── */
+/* ═══════════════════════════════════════════════════════════════
+   GET /api/v1/bills/detail/:bill_id
+═══════════════════════════════════════════════════════════════ */
 export const getBillDetail = async (req, res) => {
   try {
     const { bill_id } = req.params;
@@ -376,16 +418,15 @@ export const getBillDetail = async (req, res) => {
       return res.status(404).json({ success: false, message: "Bill tidak ditemukan!" });
     }
 
-    return res.status(200).json({
-      success: true,
-      data: data[0]
-    });
+    return res.status(200).json({ success: true, data: data[0] });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-/* ─────────────────────── GET /api/v1/bills/:bill_id/splits ─────── */
+/* ═══════════════════════════════════════════════════════════════
+   GET /api/v1/bills/:bill_id/splits
+═══════════════════════════════════════════════════════════════ */
 export const getBillSplits = async (req, res) => {
   try {
     const { bill_id } = req.params;
@@ -423,7 +464,9 @@ export const getBillSplits = async (req, res) => {
   }
 };
 
-/* ─────────────────────── PUT /api/v1/bills/:bill_id ────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PUT /api/v1/bills/:bill_id
+═══════════════════════════════════════════════════════════════ */
 export const updateBill = async (req, res) => {
   try {
     const { bill_id } = req.params;
@@ -464,7 +507,9 @@ export const updateBill = async (req, res) => {
   }
 };
 
-/* ─────────────────────── DELETE /api/v1/bills/:bill_id ─────────── */
+/* ═══════════════════════════════════════════════════════════════
+   DELETE /api/v1/bills/:bill_id
+═══════════════════════════════════════════════════════════════ */
 export const deleteBill = async (req, res) => {
   try {
     const { bill_id } = req.params;
