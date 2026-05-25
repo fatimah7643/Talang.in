@@ -330,13 +330,18 @@ export const splitBillNLP = async (req, res) => {
       }
     }
 
-    // Filter payer dari splits (payer tidak hutang ke diri sendiri)
-    const filteredSplitRows = splitRows.filter(s => s.member_id !== payerProfile.id);
+    // Payer tetap masuk splits tapi langsung is_paid: true
+    const finalSplitRows = splitRows.map(s => {
+      if (s.member_id === payerProfile.id) {
+        return { ...s, is_paid: true, amount_paid: s.share_amount };
+      }
+      return s;
+    });
 
-    if (filteredSplitRows.length > 0) {
+    if (finalSplitRows.length > 0) {
       const { error: splitError } = await supabase
         .from('bill_splits')
-        .insert(filteredSplitRows);
+        .insert(finalSplitRows);
       if (splitError) throw splitError;
     }
 
@@ -360,7 +365,7 @@ export const splitBillNLP = async (req, res) => {
         participants: finalParticipants
       },
       bill_summary: bill,
-      split_count:  filteredSplitRows.length
+      split_count:  finalSplitRows.length
     });
 
   } catch (error) {
