@@ -174,6 +174,13 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
     const entities = aiResult.rawEntities || [];
 
+    //DEBUG LOG
+    console.log("=== DEBUG NLP ===");
+    console.log("raw_text:", raw_text);
+    console.log("group_members:", group_members);
+    console.log("rawEntities dari AI:", JSON.stringify(entities));
+    console.log("personAmountMap dari AI entities:", JSON.stringify(personAmountMap));
+
     // Coba bangun personAmountMap dari rawEntities AI
     const personAmountMap = {};
     for (let i = 0; i < entities.length; i++) {
@@ -194,6 +201,10 @@ export const splitBillNLP = async (req, res) => {
       const fallback = extractPersonAmountsFromText(raw_text, group_members);
       Object.assign(personAmountMap, fallback);
     }
+
+    //DEBUG LOG
+    console.log("personAmountMap FINAL:", JSON.stringify(personAmountMap));
+    console.log("isCustomSplit:", Object.keys(personAmountMap).length > 0);
 
     // ✅ FIX AMOUNT: prioritaskan "total X" dari teks
     const allNominals   = extractAllNominalsFromText(raw_text);
