@@ -29,7 +29,6 @@ const App = () => {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
           {/* Protected routes dengan Layout */}
           <Route path="/dashboard" element={
             <ProtectedRoute>

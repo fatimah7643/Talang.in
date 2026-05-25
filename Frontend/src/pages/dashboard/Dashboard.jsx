@@ -313,6 +313,20 @@ export default function Dashboard() {
           name: item.groups?.group_name || '—',
         }))
         setGrupList(list)
+
+        if (list.length === 0) {
+          setStats({
+            totalPengeluaran: 0,
+            utangAktif: 0,
+            totalGrup: 0,
+            totalAnggota: 0
+          })
+
+          setTransaksi([])
+          setInsights([])
+          setLoading(false)
+          return
+        }
         const grupId = list[0].id
         const [trxRes, balRes] = await Promise.allSettled([
           api.get(`/bills/${grupId}/history?limit=5`),
@@ -418,7 +432,7 @@ export default function Dashboard() {
               </div>
               {/* Greeting */}
               <h1 className="text-2xl font-bold mb-1">
-                Halo, {user?.name ?? 'Pengguna'}
+                Halo, {user?.full_name ?? 'Pengguna Talang.in'}!
               </h1>
               <p className="text-sm opacity-70 max-w-md">
                 Pantau pengeluaran, utang, dan kondisi keuangan grupmu dalam satu tempat.
