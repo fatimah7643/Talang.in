@@ -153,7 +153,14 @@ export const googleCallback = async (req, res) => {
     }
 
     // Ambil data user yang diperlukan untuk dikirim ke frontend
-    const userData = encodeURIComponent(JSON.stringify({ id: user.id, email: user.email }));
+    const userData = encodeURIComponent(JSON.stringify({ 
+      id: user.id, 
+      email: user.email,
+    full_name: 
+      user.user_metadata.full_name ||
+      user.user_metadata.name ||
+      'Pengguna'
+    }));
     
     // Alihkan user ke frontend localhost sambil membawa token & data user di URL query
     return res.redirect(`http://localhost:5173/dashboard?token=${session.access_token}&user=${userData}`);
