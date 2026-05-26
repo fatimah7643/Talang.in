@@ -704,7 +704,10 @@ function ModalNLP({ grups, onClose, onAdded }) {
     try {
       const group_members = members
         .filter(m => selected.includes(m.id))
-        .map(m => m.name.split(' ')[0]) // Kirim nama depan aja ke AI biar lebih akurat
+        .map(m => ({
+          id:     m.id,
+          name:   m.name, //full name
+        })) 
       const res = await api.post('/bills/split-nlp', {
         group_id: grupId,
         raw_text: text,

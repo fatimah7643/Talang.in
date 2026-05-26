@@ -443,13 +443,16 @@ export default function Analytics() {
       // Normalize health: backend returns { health_score, label, narrative, detail }
       const healthRaw  = healthRes.status === "fulfilled" ? healthRes.value.data : null;
       const health     = healthRaw ? {
-        score:          healthRaw.health_score ?? 0,
-        label:          healthRaw.label,
-        narrative:      healthRaw.narrative,
-        total_splits:   healthRaw.detail?.total_splits ?? 0,
-        paid:           healthRaw.detail?.paid ?? 0,
-        unpaid:         healthRaw.detail?.unpaid ?? 0,
-        debt_ratio:     healthRaw.detail?.debt_ratio ?? 0,
+        score:               healthRaw.health_score ?? 0,
+        label:               healthRaw.label,
+        narrative:           healthRaw.narrative,
+        total_splits:        healthRaw.detail?.total_splits ?? 0,
+        paid:                healthRaw.detail?.paid ?? 0,
+        unpaid:              healthRaw.detail?.unpaid ?? 0,
+        debt_ratio:          healthRaw.detail?.debt_ratio ?? 0,
+        member_contributions:healthRaw.member_contributions ?? [],
+        total_members:       healthRaw.total_members ?? 0,
+        active_members:      healthRaw.active_members ?? 0,
       } : null;
 
       // Normalize conflicts: backend returns { conflicts: [...] }
@@ -610,10 +613,10 @@ export default function Analytics() {
 
             {/* ── Stat Cards ───────────────────────────────────────────── */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Total Transaksi"   value={health?.total_transactions ?? 0}  sub="dalam grup"                                    icon={Hash}       color={C.blue}    />
-              <StatCard label="Total Pengeluaran" value={fmt(health?.total_spending)}       sub="keseluruhan"                                   icon={TrendingUp} color={C.teal}    />
-              <StatCard label="Hutang Aktif"      value={health?.active_debts ?? 0}         sub="belum lunas"                                   icon={CreditCard} color="#f59e0b"   />
-              <StatCard label="Anggota Aktif"     value={health?.active_members ?? 0}       sub={`dari ${health?.total_members ?? 0} anggota`}  icon={Users}      color={C.navy}    />
+              <StatCard label="Total Transaksi"   value={health?.total_bills ?? 0}     sub="dalam grup"                                    icon={Hash}       color={C.blue}  />
+              <StatCard label="Total Pengeluaran" value={fmt(health?.total_amount ?? 0)} sub="keseluruhan"                                  icon={TrendingUp} color={C.teal}  />
+              <StatCard label="Hutang Aktif"      value={health?.unpaid ?? 0}           sub="belum lunas"                                   icon={CreditCard} color="#f59e0b" />
+              <StatCard label="Anggota Aktif"     value={health?.active_members ?? 0}   sub={`dari ${health?.total_members ?? 0} anggota`}  icon={Users}      color={C.navy}  />
             </div>
 
             {/* ── Tabs ─────────────────────────────────────────────────── */}

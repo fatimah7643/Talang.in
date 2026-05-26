@@ -10,12 +10,33 @@ export const getHealthScore = async (req, res) => {
   try {
     const { group_id } = req.params;
 
-    const { data: splits, error } = await supabase
-      .from('bill_splits')
-      .select('share_amount, amount_paid, is_paid, bills!inner(group_id)')
-      .eq('bills.group_id', group_id);
+    // FIX: dua query terpisah lebih reliable dari join filter
+    const { data: bills, error: billsError } = await supabase
+      .from('bills')
+      .select('id')
+      .eq('group_id', group_id);
 
-    if (error) throw error;
+    if (billsError) throw billsError;
+
+    if (!bills || bills.length === 0) {
+      return res.status(200).json({
+        success: true,
+        group_id,
+        health_score: 100,
+        label: 'Sempurna',
+        narrative: 'Grup ini belum memiliki transaksi. Mulai catat pengeluaran pertama kalian!',
+        detail: { total_splits: 0, paid: 0, unpaid: 0, debt_ratio: 0 }
+      });
+    }
+
+    const billIds = bills.map(b => b.id);
+
+    const { data: splits, error: splitsError } = await supabase
+      .from('bill_splits')
+      .select('share_amount, amount_paid, is_paid, member_id')
+      .in('bill_id', billIds);
+
+    if (splitsError) throw splitsError;
 
     const total = splits.length;
     if (total === 0) {
@@ -24,28 +45,58 @@ export const getHealthScore = async (req, res) => {
         group_id,
         health_score: 100,
         label: 'Sempurna',
-        narrative: 'Grup ini belum memiliki transaksi. Mulai catat pengeluaran pertama kalian!'
+        narrative: 'Semua tagihan sudah lunas!',
+        detail: { total_splits: 0, paid: 0, unpaid: 0, debt_ratio: 0 }
       });
     }
 
     const unpaidCount = splits.filter(s => !s.is_paid).length;
-    const totalDebt = splits.reduce((sum, s) => sum + (Number(s.share_amount) - Number(s.amount_paid)), 0);
-    const totalBill = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
-    const debtRatio = totalBill > 0 ? totalDebt / totalBill : 0;
+    const totalDebt   = splits.reduce((sum, s) => sum + (Number(s.share_amount) - Number(s.amount_paid)), 0);
+    const totalBill   = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
+    const debtRatio   = totalBill > 0 ? totalDebt / totalBill : 0;
 
     let score = Math.round((1 - debtRatio) * 100);
     if (score < 0) score = 0;
     if (score > 100) score = 100;
 
+    // Member contributions
+    const memberIds = [...new Set(splits.map(s => s.member_id))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, username')
+      .in('id', memberIds);
+
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p.full_name || p.username || '—'; });
+
+    const memberMap = {};
+    splits.forEach(s => {
+      if (!memberMap[s.member_id]) {
+        memberMap[s.member_id] = { user_id: s.member_id, name: profileMap[s.member_id] || '—', paid: 0, owed: 0 };
+      }
+      memberMap[s.member_id].owed += Number(s.share_amount);
+      memberMap[s.member_id].paid += Number(s.amount_paid);
+    });
+    const member_contributions = Object.values(memberMap);
+
+    // Member stats
+    const { data: groupMembers } = await supabase
+      .from('group_members')
+      .select('profile_id')
+      .eq('group_id', group_id);
+
+    const total_members  = groupMembers?.length ?? 0;
+    const active_members = memberIds.length;
+
     let label, narrative;
     if (score >= 80) {
-      label = 'Sehat';
+      label     = 'Sehat';
       narrative = `Keuangan grup kalian sangat sehat! ${total - unpaidCount} dari ${total} tagihan sudah lunas. Pertahankan! 💪`;
     } else if (score >= 50) {
-      label = 'Perlu Perhatian';
+      label     = 'Perlu Perhatian';
       narrative = `Masih ada ${unpaidCount} tagihan belum lunas. Yuk segera selesaikan! ⚠️`;
     } else {
-      label = 'Kritis';
+      label     = 'Kritis';
       narrative = `Tingkat utang grup sangat tinggi (${Math.round(debtRatio * 100)}% belum terbayar). Segera lakukan rekonsiliasi! 🚨`;
     }
 
@@ -55,7 +106,15 @@ export const getHealthScore = async (req, res) => {
       health_score: score,
       label,
       narrative,
-      detail: { total_splits: total, paid: total - unpaidCount, unpaid: unpaidCount, debt_ratio: debtRatio }
+      member_contributions,
+      total_members,
+      active_members,
+      detail: {
+        total_splits: total,
+        paid:         total - unpaidCount,
+        unpaid:       unpaidCount,
+        debt_ratio:   debtRatio
+      }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
