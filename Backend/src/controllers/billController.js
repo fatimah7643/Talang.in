@@ -325,6 +325,13 @@ export const splitBillNLP = async (req, res) => {
       if (splitError) throw splitError;
     }
 
+    await logActivity(
+      group_id,
+      payerProfile.id,
+      'BILL_CREATED',
+      `Tagihan AI: "${bill.description}" sebesar Rp${correctedAmount.toLocaleString()} dibagi ke ${filteredSplitRows.length} anggota.`
+    );
+
     return res.status(201).json({
       success: true,
       message: "Tagihan berhasil dibuat via AI Smart Input!",
@@ -349,12 +356,6 @@ export const splitBillNLP = async (req, res) => {
     });
 
   } catch (error) {
-    await logActivity(
-      group_id,
-      payerProfile.id,
-      'BILL_CREATED',
-      `Tagihan AI: "${bill.description}" sebesar Rp${correctedAmount.toLocaleString()} dibagi ke ${filteredSplitRows.length} anggota.`
-    )
     return res.status(500).json({ success: false, message: error.message });
   }
 };
