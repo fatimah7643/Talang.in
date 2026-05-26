@@ -109,7 +109,7 @@ export const uploadAvatar = async (req, res) => {
     const ext  = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
     const path = `${profile_id}/avatar.${ext}`;
  
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from('avatars')
       .upload(path, req.file.buffer, {
         contentType: req.file.mimetype,
@@ -118,7 +118,7 @@ export const uploadAvatar = async (req, res) => {
  
     if (uploadError) throw uploadError;
  
-    const { data: { publicUrl } } = supabase.storage
+    const { data: { publicUrl } } = supabaseAdmin.storage
       .from('avatars')
       .getPublicUrl(path);
  
