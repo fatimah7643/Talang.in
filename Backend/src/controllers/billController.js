@@ -157,8 +157,7 @@ export const splitBillNLP = async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: raw_text, 
-        entities: [], 
-        group_members: group_members.map(m => m.name) // kirim nama saja ke AI untuk matching lebih mudah
+        entities: []
       })
     });
 
