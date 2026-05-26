@@ -185,6 +185,19 @@ export const simplifyDebt = async (req, res) => {
       if (c.amount < 0.01) j++;
     }
 
+    // Simpan ke simplified_debts (hapus lama, insert baru)
+    await supabase.from('simplified_debts').delete().eq('group_id', group_id);
+    if (transactions.length > 0) {
+      await supabase.from('simplified_debts').insert(
+        transactions.map(t => ({
+          group_id,
+          debtor_id:   t.from,
+          creditor_id: t.to,
+          amount:      t.amount,
+        }))
+      );
+    }
+
     return res.status(200).json({
       success: true,
       message: `Utang berhasil disederhanakan menjadi ${transactions.length} transfer minimal.`,

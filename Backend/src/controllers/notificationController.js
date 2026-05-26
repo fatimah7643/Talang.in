@@ -4,7 +4,26 @@ dotenv.config()
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
-// GET /api/v1/notifications
+/* ═══════════════════════════════════════════════════════════════
+   HELPER — bisa diimport dari controller lain
+═══════════════════════════════════════════════════════════════ */
+export const createNotification = async ({ user_id, type, title, message }) => {
+  try {
+    await supabase.from('notifications').insert([{
+      user_id,
+      type,
+      title,
+      message,
+      is_read: false,
+    }])
+  } catch (err) {
+    console.warn('Gagal insert notifikasi:', err.message)
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GET /api/v1/notifications
+═══════════════════════════════════════════════════════════════ */
 export const getNotifications = async (req, res) => {
   try {
     const user_id = req.user.id
@@ -21,7 +40,9 @@ export const getNotifications = async (req, res) => {
   }
 }
 
-// PUT /api/v1/notifications/:id/read
+/* ═══════════════════════════════════════════════════════════════
+   PUT /api/v1/notifications/:id/read
+═══════════════════════════════════════════════════════════════ */
 export const markAsRead = async (req, res) => {
   try {
     const { id } = req.params
@@ -37,7 +58,9 @@ export const markAsRead = async (req, res) => {
   }
 }
 
-// PUT /api/v1/notifications/read-all
+/* ═══════════════════════════════════════════════════════════════
+   PUT /api/v1/notifications/read-all
+═══════════════════════════════════════════════════════════════ */
 export const markAllAsRead = async (req, res) => {
   try {
     const { error } = await supabase

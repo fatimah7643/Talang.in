@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createNotification } from './notificationController.js';
 
 dotenv.config();
 
@@ -70,6 +71,15 @@ export const splitBill = async (req, res) => {
       group_id, payer_id, 'BILL_CREATED',
       `Tagihan baru: "${billDescription}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`
     );
+
+    await Promise.all(nonPayerSplits.map(s =>
+      createNotification({
+        user_id: s.member_id,
+        type:    'transaction',
+        title:   `Tagihan baru: ${billDescription}`,
+        message: `Kamu punya tagihan Rp${Number(s.share_amount).toLocaleString()} yang perlu dibayar.`,
+      })
+    ));
 
     return res.status(201).json({
       success: true,
@@ -331,6 +341,15 @@ export const splitBillNLP = async (req, res) => {
       'BILL_CREATED',
       `Tagihan AI: "${bill.description}" sebesar Rp${correctedAmount.toLocaleString()} dibagi ke ${filteredSplitRows.length} anggota.`
     );
+
+    await Promise.all(filteredSplitRows.map(s =>
+      createNotification({
+        user_id: s.member_id,
+        type:    'transaction',
+        title:   `Tagihan baru: ${bill.description}`,
+        message: `Kamu punya tagihan Rp${Number(s.share_amount).toLocaleString()} yang perlu dibayar.`,
+      })
+    ));
 
     return res.status(201).json({
       success: true,

@@ -100,6 +100,10 @@ export const getHealthScore = async (req, res) => {
       narrative = `Tingkat utang grup sangat tinggi (${Math.round(debtRatio * 100)}% belum terbayar). Segera lakukan rekonsiliasi! 🚨`;
     }
 
+    await supabase
+      .from('group_analytics')
+      .upsert({ group_id, health_score: score }, { onConflict: 'group_id' });
+
     return res.status(200).json({
       success: true,
       group_id,
