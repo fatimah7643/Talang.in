@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import multer from 'multer';
 
 dotenv.config();
 
@@ -9,6 +10,17 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_URL, 
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    if (file.mimetype.startsWith('image/')) cb(null, true);
+    else cb(new Error('Hanya file gambar yang diizinkan.'));
+  }
+});
+ 
+export const uploadMiddleware = upload.single('avatar');
 
 // GET /api/v1/profiles/:profile_id
 export const getProfile = async (req, res) => {
@@ -74,6 +86,57 @@ export const updateProfile = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Profil berhasil diperbarui!",
+      data
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// POST /api/v1/profiles/:profile_id/avatar
+export const uploadAvatar = async (req, res) => {
+  try {
+    const { profile_id } = req.params;
+ 
+    if (req.user.id !== profile_id) {
+      return res.status(403).json({ success: false, message: 'Akses ditolak.' });
+    }
+ 
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'File tidak ditemukan.' });
+    }
+ 
+    const ext  = req.file.mimetype === 'image/png' ? 'png' : 'jpg';
+    const path = `${profile_id}/avatar.${ext}`;
+ 
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: true,
+      });
+ 
+    if (uploadError) throw uploadError;
+ 
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(path);
+ 
+    const avatarUrl = `${publicUrl}?t=${Date.now()}`;
+ 
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ avatar_url: avatarUrl })
+      .eq('id', profile_id)
+      .select()
+      .single();
+ 
+    if (error) throw error;
+ 
+    return res.status(200).json({
+      success: true,
+      message: 'Foto profil berhasil diupload!',
+      avatar_url: avatarUrl,
       data
     });
   } catch (error) {

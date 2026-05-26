@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, Lock, Eye, EyeOff, Save,
@@ -94,6 +94,10 @@ export default function Profil() {
   const [profile, setProfile]   = useState(null)
   const [loading, setLoading]   = useState(true)
   const toast = useToast()
+  const fileInputRef = useRef(null)
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   // timerRef removed (was unused)
 
   const [editForm, setEditForm]     = useState({ name: '', email: '', username: '', phone: '' })
@@ -116,6 +120,60 @@ export default function Profil() {
 const showToast = (message, type = 'success') => {
   if (type === 'success') toast.success(message)
   else toast.error(message)
+}
+
+const handleAvatarSelect = (e) => {
+  const file = e.target.files[0]
+
+  if (!file) return
+
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Ukuran file maksimal 5MB', 'error')
+    return
+  }
+
+  setAvatarFile(file)
+  setAvatarPreview(URL.createObjectURL(file))
+}
+
+const handleUploadAvatar = async () => {
+  if (!avatarFile) return
+
+  try {
+    setUploadingAvatar(true)
+
+    const formData = new FormData()
+    formData.append('avatar', avatarFile)
+
+    const response = await api.post(
+      `/profiles/${user.id}/avatar`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      }
+    )
+
+    setProfile(prev => ({
+      ...prev,
+      avatar_url: response.data.avatar_url
+    }))
+
+    setAvatarFile(null)
+    setAvatarPreview(null)
+
+    showToast('Foto profil berhasil diupload!')
+  } catch (error) {
+    console.error(error)
+
+    showToast(
+      error.response?.data?.message || 'Gagal upload foto',
+      'error'
+    )
+  } finally {
+    setUploadingAvatar(false)
+  }
 }
 
   useEffect(() => {
@@ -178,6 +236,7 @@ const showToast = (message, type = 'success') => {
   }
 
   const initial = (profile?.full_name ?? profile?.name ?? 'U')[0].toUpperCase()
+  const avatarUrl = avatarPreview || profile?.avatar_url
   const userId  = profile?.id ? `ID: TLG-${String(profile.id).padStart(4, '0')}` : null
 
   return (
@@ -209,13 +268,33 @@ const showToast = (message, type = 'success') => {
             {loading ? (
               <div className="w-16 h-16 rounded-full bg-gray-100 animate-pulse shrink-0" />
             ) : (
-              <div className="relative shrink-0">
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white"
-                  style={{ backgroundColor: C.navy }}>
-                  {initial}
+              <div
+                className="relative shrink-0 cursor-pointer group"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="avatar"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-white shadow"
+                  />
+                ) : (
+                  <div
+                    className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold text-white"
+                    style={{ backgroundColor: C.navy }}
+                  >
+                    {initial}
+                  </div>
+                )}
+
+                <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <Upload size={16} className="text-white" />
                 </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"
-                  style={{ backgroundColor: C.teal }}>
+
+                <div
+                  className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center"
+                  style={{ backgroundColor: C.teal }}
+                >
                   <User size={10} color="white" />
                 </div>
               </div>
@@ -288,15 +367,66 @@ const showToast = (message, type = 'success') => {
 
               {/* Upload foto */}
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1.5">Foto Profil</label>
-                <div className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-8 flex flex-col items-center gap-2 cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: `${C.teal}12` }}>
-                    <Upload size={18} style={{ color: C.teal }} />
-                  </div>
-                  <p className="text-sm text-gray-500 font-medium">Klik atau seret file untuk upload</p>
-                  <p className="text-xs text-gray-400">PNG, JPG up to 5MB</p>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">
+                  Foto Profil
+                </label>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg"
+                  className="hidden"
+                  onChange={handleAvatarSelect}
+                />
+
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl px-4 py-8 flex flex-col items-center gap-2 cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition"
+                >
+                  {avatarPreview ? (
+                    <>
+                      <img
+                        src={avatarPreview}
+                        alt="preview"
+                        className="w-16 h-16 rounded-full object-cover"
+                      />
+
+                      <p className="text-sm text-[#36ADA3] font-medium">
+                        Foto dipilih — klik upload untuk simpan
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${C.teal}12` }}
+                      >
+                        <Upload size={18} style={{ color: C.teal }} />
+                      </div>
+
+                      <p className="text-sm text-gray-500 font-medium">
+                        Klik atau seret file untuk upload
+                      </p>
+
+                      <p className="text-xs text-gray-400">
+                        PNG, JPG up to 5MB
+                      </p>
+                    </>
+                  )}
                 </div>
+
+                {avatarFile && (
+                  <button
+                    onClick={handleUploadAvatar}
+                    disabled={uploadingAvatar}
+                    className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition disabled:opacity-60"
+                    style={{ backgroundColor: C.teal }}
+                  >
+                    <Upload size={14} />
+
+                    {uploadingAvatar ? 'Mengupload...' : 'Upload Foto'}
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-3 pt-1">
