@@ -155,7 +155,11 @@ export const splitBillNLP = async (req, res) => {
     const aiResponse = await fetch(`${process.env.AI_BASE_URL}/parse-transaction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: raw_text, entities: [], group_members })
+      body: JSON.stringify({ 
+        text: raw_text, 
+        entities: [], 
+        group_members: group_members.map(m => m.name) // kirim nama saja ke AI untuk matching lebih mudah
+      })
     });
 
     if (!aiResponse.ok) throw new Error("AI service tidak merespons dengan benar.");
@@ -182,10 +186,18 @@ export const splitBillNLP = async (req, res) => {
       // AI sudah hitung semua (diskon, tax, qty) — langsung pakai
       finalParticipants = aiResult.participants
         .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
-        .map(p => ({ name: p.name, amount: p.amount }));
+        .map(p => {
+          const matched = group_members.find(m => 
+            m.name.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+          )
+          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
+        })
+        .filter(p => p !== null);
 
     } else {
-      // Fallback: coba baca personAmountMap dari entities / regex
+      const memberNames = group_members.map(m => m.name);
+
       const personAmountMap = {};
       for (let i = 0; i < entities.length; i++) {
         if (entities[i].label === 'PERSON') {
@@ -201,7 +213,7 @@ export const splitBillNLP = async (req, res) => {
       }
 
       if (Object.keys(personAmountMap).length === 0) {
-        const fallback = extractPersonAmountsFromText(raw_text, group_members);
+        const fallback = extractPersonAmountsFromText(raw_text, memberNames);
         Object.assign(personAmountMap, fallback);
       }
 
@@ -215,24 +227,27 @@ export const splitBillNLP = async (req, res) => {
       const hasCustom = Object.keys(personAmountMap).length > 0;
       if (hasCustom) {
         finalSplitMethod = 'custom';
-        finalParticipants = group_members.map(name => {
-          const firstName = name.split(' ')[0];
-          const matchedKey = Object.keys(personAmountMap).find(
-            k => k.toLowerCase() === firstName.toLowerCase() ||
-                k.toLowerCase() === name.toLowerCase()
-          );
-          if (matchedKey && name.toLowerCase() !== payerNorm) {
-            return { name, amount: personAmountMap[matchedKey] };
-          }
-          return null;
-        }).filter(p => p !== null && p.amount > 0);
+        finalParticipants = group_members
+          .map(m => {
+            const firstName = m.name.split(' ')[0];
+            const matchedKey = Object.keys(personAmountMap).find(
+              k => k.toLowerCase() === firstName.toLowerCase() ||
+                  k.toLowerCase() === m.name.toLowerCase()
+            );
+            if (matchedKey && m.name.toLowerCase() !== payerNorm) {
+              return { id: m.id, name: m.name, amount: personAmountMap[matchedKey] };
+            }
+            return null;
+          })
+          .filter(p => p !== null && p.amount > 0);
       } else {
         finalSplitMethod = 'equal';
-        const debtors = group_members.filter(n => n.toLowerCase() !== payerNorm);
+        const debtors = group_members.filter(m => m.name.toLowerCase() !== payerNorm);
         const equalShare = Math.floor(fallbackAmount / debtors.length);
         const rem = fallbackAmount - equalShare * debtors.length;
-        finalParticipants = debtors.map((name, idx) => ({
-          name,
+        finalParticipants = debtors.map((m, idx) => ({
+          id:     m.id,
+          name:   m.name,
           amount: idx === 0 ? equalShare + rem : equalShare
         }));
       }
@@ -241,16 +256,16 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 3: Simpan ke Database ──────────────────────────────
 
     // Cari payer di profiles
-    const { data: payerProfile, error: payerError } = await supabase
-      .from('profiles')
-      .select('id')
-      .or(`username.ilike.%${aiResult.paidBy}%,full_name.ilike.%${aiResult.paidBy}%`)
-      .single();
+    const payerMember = group_members.find(m => 
+      m.name.toLowerCase().includes(aiResult.paidBy?.toLowerCase()) ||
+      aiResult.paidBy?.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+    )
+    const payerProfile = payerMember ? { id: payerMember.id } : null
 
-    if (payerError || !payerProfile) {
+    if (!payerProfile) {
       return res.status(400).json({
         success: false,
-        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan. Pastikan username sesuai.`,
+        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di daftar anggota grup.`,
         ai_parsed: aiResult
       });
     }
@@ -282,21 +297,14 @@ export const splitBillNLP = async (req, res) => {
     // Cari member_id tiap participant lalu susun splitRows
     const splitRows = [];
     for (const participant of finalParticipants) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .or(`username.ilike.%${participant.name}%,full_name.ilike.%${participant.name}%`)
-        .single();
-
-      if (profile) {
-        splitRows.push({
-          bill_id:      bill.id,
-          member_id:    profile.id,
-          share_amount: participant.amount,
-          amount_paid:  0,
-          is_paid:      false
-        });
-      }
+      if (!participant.id) continue
+      splitRows.push({
+        bill_id:      bill.id,
+        member_id:    participant.id,
+        share_amount: participant.amount,
+        amount_paid:  0,
+        is_paid:      false
+      })
     }
 
     // Filter payer dari splits (payer tidak hutang ke diri sendiri)
