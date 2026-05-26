@@ -1,14 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   User, Mail, Lock, Eye, EyeOff, Save,
+  // eslint-disable-next-line no-unused-vars
   LogOut, Trash2, CheckCircle, XCircle,
+  // eslint-disable-next-line no-unused-vars
   ChevronRight, Bell, Monitor, Shield,
   Upload, Phone, AtSign,
 } from 'lucide-react'
 import api from '../../services/api'
 import { fmtMonthYear } from '../../utils/format'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 const C = {
   navyDark: '#121358',
@@ -18,19 +21,6 @@ const C = {
   bg:       '#f4f6fb',
 }
 
-/* ── Toast ── */
-function Toast({ toast }) {
-  if (!toast) return null
-  const ok = toast.type === 'success'
-  return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3
-      rounded-2xl shadow-xl text-sm font-medium border animate-fade-in
-      ${ok ? 'bg-teal-50 border-teal-200 text-teal-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-      {ok ? <CheckCircle size={16} /> : <XCircle size={16} />}
-      {toast.message}
-    </div>
-  )
-}
 
 /* ── Input ── */
 function Input({ label, id, type = 'text', value, onChange, disabled, rightEl, error, placeholder, icon: Icon }) {
@@ -103,8 +93,8 @@ export default function Profil() {
 
   const [profile, setProfile]   = useState(null)
   const [loading, setLoading]   = useState(true)
-  const [toast, setToast]       = useState(null)
-  const timerRef                = useRef(null)
+  const toast = useToast()
+  // timerRef removed (was unused)
 
   const [editForm, setEditForm]     = useState({ name: '', email: '', username: '', phone: '' })
   const [editErrors, setEditErrors] = useState({})
@@ -123,11 +113,10 @@ export default function Profil() {
     insight_mingguan:      false,
   })
 
-  const showToast = (message, type = 'success') => {
-    clearTimeout(timerRef.current)
-    setToast({ message, type })
-    timerRef.current = setTimeout(() => setToast(null), 3500)
-  }
+const showToast = (message, type = 'success') => {
+  if (type === 'success') toast.success(message)
+  else toast.error(message)
+}
 
   useEffect(() => {
     const go = async () => {
@@ -424,8 +413,6 @@ export default function Profil() {
           </div>
         </div>
       </div>
-
-      <Toast toast={toast} />
     </div>
   )
 }

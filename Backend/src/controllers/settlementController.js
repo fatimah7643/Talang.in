@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createNotification } from './notificationController.js';
 
 dotenv.config();
 
@@ -266,6 +267,34 @@ export const markAsPaid = async (req, res) => {
       .select();
 
     if (updateError) throw updateError;
+      // Notifikasi ke creditor kalau ada pembayaran
+      try {
+      const { data: splitDetail } = await supabase
+        .from('bill_splits')
+        .select('member_id, bills!inner(payer_id, description), member:profiles!bill_splits_member_id_fkey(full_name, username)')
+        .eq('id', split_id)
+        .single()
+
+      if (splitDetail) {
+        const creditor_id = splitDetail.bills.payer_id
+        const debtor_name = splitDetail.member?.full_name || splitDetail.member?.username || 'Seseorang'
+        const bill_desc   = splitDetail.bills.description
+
+        await createNotification({
+          user_id: creditor_id,
+          type:    'payment',
+          title:   new_is_paid
+            ? `${debtor_name} sudah melunasi hutang`
+            : `${debtor_name} membayar cicilan`,
+          message: new_is_paid
+            ? `Tagihan "${bill_desc}" telah dilunasi sepenuhnya.`
+            : `Cicilan Rp${Number(new_amount_paid).toLocaleString()} untuk "${bill_desc}" berhasil dicatat.`,
+        })
+      }
+    } catch (notifErr) {
+      console.warn('Gagal kirim notifikasi pembayaran:', notifErr.message)
+    }
+
 
     const remaining = Number(split.share_amount) - new_amount_paid;
 

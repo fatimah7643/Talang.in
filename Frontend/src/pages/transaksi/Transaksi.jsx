@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 /* ─────────────────────── CONSTANTS ─────────────────────────── */
 const KATEGORI = [
@@ -154,6 +155,7 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
   const [loading, setLoading]                 = useState(false)
   const [loadMem, setLoadMem]                 = useState(false)
   const [error, setError]                     = useState('')
+  const toast = useToast()
   const [payerDropOpen, setPayerDropOpen]     = useState(false)
   const payerRef = useRef(null)
 
@@ -336,7 +338,9 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
 
       addedTrxs.forEach(t => onAdded(t))
       onClose()
+      toast.success('Transaksi berhasil!', `${addedTrxs.length} tagihan berhasil disimpan.`)
     } catch (e) {
+      toast.error('Gagal menyimpan', e.response?.data?.message || 'Gagal menambah transaksi.')
       setError(e.response?.data?.message || 'Gagal menambah transaksi.')
     } finally {
       setLoading(false)
@@ -667,6 +671,7 @@ function ModalNLP({ grups, onClose, onAdded }) {
   const [loadMem, setLoadMem] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const toast = useToast()
 
   useEffect(() => {
   if (!grupId) return
@@ -732,7 +737,9 @@ function ModalNLP({ grups, onClose, onAdded }) {
       }
       onAdded(normalizedTrx)
       onClose()
+      toast.success('Tagihan AI berhasil!', 'Transaksi berhasil diproses.')
     } catch (e) {
+      toast.error('AI gagal', e.response?.data?.message || 'Coba tulis lebih jelas.')
       setError(e.response?.data?.message || 'Gagal memproses. Coba tulis lebih jelas.')
     } finally {
       setLoading(false)

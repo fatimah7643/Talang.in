@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+
 
 /* ─────────────────────── SKELETON ──────────────────────────── */
 const Sk = ({ className = '' }) => (
@@ -60,6 +62,7 @@ function ModalBuatGrup({ onClose, onCreated, userId }) {
   const [form, setForm]       = useState({ name: '', description: '' })
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
+  const toast = useToast()
 
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError('Nama grup wajib diisi.'); return }
@@ -74,8 +77,10 @@ function ModalBuatGrup({ onClose, onCreated, userId }) {
       // Normalize field: backend return group_name, frontend pakai name
       onCreated({ ...newGrup, name: newGrup.group_name, is_owner: true })
       onClose()
+      toast.success('Grup berhasil dibuat.')
     } catch (e) {
       setError(e.response?.data?.message || 'Gagal membuat grup.')
+      toast.error('Gagal membuat grup.', e.response?.data?.message || 'Coba lagi nanti.')
     } finally {
       setLoading(false)
     }
@@ -130,6 +135,7 @@ function ModalUndang({ grup, onClose }) {
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const toast = useToast()
 
   const inviteLink = `${window.location.origin}/join/${grup?.id || ''}`
 
@@ -148,9 +154,11 @@ function ModalUndang({ grup, onClose }) {
         username: username.trim(),
       })
       setSuccess('Anggota berhasil ditambahkan!')
+      toast.success('Anggota berhasil ditambahkan!')
       setUsername('')
     } catch (e) {
       setError(e.response?.data?.message || 'Gagal menambahkan anggota.')
+      toast.error('Gagal menambahkan', e.response?.data?.message || 'Coba lagi nanti.')
     } finally {
       setLoading(false)
     }
@@ -217,6 +225,7 @@ function ModalUndang({ grup, onClose }) {
 function ModalKeluar({ grup, onClose, onLeft, userId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const toast = useToast()
 
   const handleLeave = async () => {
     setLoading(true); setError('')
@@ -225,8 +234,10 @@ function ModalKeluar({ grup, onClose, onLeft, userId }) {
       await api.delete(`/groups/${grup.id}/members/${userId}`)
       onLeft(grup.id)
       onClose()
+      toast.success('Berhasil keluar dari grup!')
     } catch (e) {
       setError(e.response?.data?.message || 'Gagal keluar dari grup.')
+      toast.error('Gagal keluar', e.response?.data?.message || 'Coba lagi nanti.')
     } finally {
       setLoading(false)
     }

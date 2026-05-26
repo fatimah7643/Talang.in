@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 /* ─────────────────────── HELPERS ───────────────────── */
 const rupiah = (n) => 'Rp ' + Number(Math.abs(n) || 0).toLocaleString('id-ID')
@@ -37,6 +38,7 @@ function ModalSettle({ debt, onClose, onSettled }) {
   const [notes, setNotes]             = useState('')
   const [paymentType, setPaymentType] = useState('full')
   const [partialAmount, setPartialAmount] = useState('')
+  const toast = useToast()
 
   const handleSettle = async () => {
     setLoading(true); setError('')
@@ -77,7 +79,8 @@ function ModalSettle({ debt, onClose, onSettled }) {
           )
         )
       }
-
+      
+      toast.success('Berhasil menandai lunas.')
       onSettled(debt)
       onClose()
     } catch (e) {

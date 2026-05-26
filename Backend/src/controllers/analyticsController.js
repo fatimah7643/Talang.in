@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import { createNotification } from './notificationController.js';
 
 dotenv.config();
 
@@ -103,6 +104,23 @@ export const getHealthScore = async (req, res) => {
     await supabase
       .from('group_analytics')
       .upsert({ group_id, health_score: score }, { onConflict: 'group_id' });
+
+      // NOTIFIKASI: Hanya kirim jika health score turun drastis (misal >20 poin) atau masuk kategori 'Kritis'
+      if (score < 50) {
+      const { data: members } = await supabase
+        .from('group_members')
+        .select('profile_id')
+        .eq('group_id', group_id)
+
+      await Promise.all((members || []).map(m =>
+        createNotification({
+          user_id: m.profile_id,
+          type:    'health',
+          title:   'Kesehatan Keuangan Grup Kritis',
+          message: `Skor grup kamu ${score}/100. Segera selesaikan hutang yang belum terbayar!`,
+        })
+      ))
+    }
 
     return res.status(200).json({
       success: true,
