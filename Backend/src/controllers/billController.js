@@ -152,12 +152,18 @@ export const splitBillNLP = async (req, res) => {
     }
 
     // ── STEP 1: Kirim ke AI ──────────────────────────────────────
+    const sortedMembers = [...group_members].sort((a, b) => {
+      const posA = raw_text.toLowerCase().indexOf(a.name.split(' ')[0].toLowerCase())
+      const posB = raw_text.toLowerCase().indexOf(b.name.split(' ')[0].toLowerCase())
+      return (posA === -1 ? 999 : posA) - (posB === -1 ? 999 : posB)
+    });
     const aiResponse = await fetch(`${process.env.AI_BASE_URL}/parse-transaction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         text: raw_text, 
-        entities: []
+        entities: [],
+        group_members: sortedMembers.map(m => m.name)
       })
     });
 
@@ -259,10 +265,6 @@ export const splitBillNLP = async (req, res) => {
       m.name.toLowerCase().includes(aiResult.paidBy?.toLowerCase()) ||
       aiResult.paidBy?.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
     )
-
-    // DEBUGGING 
-    console.log('AI paidBy:', aiResult.paidBy);
-    console.log('group_members:', group_members);
 
     const payerProfile = payerMember ? { id: payerMember.id } : null
 
