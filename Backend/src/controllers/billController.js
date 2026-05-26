@@ -5,10 +5,13 @@ dotenv.config();
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 
-const logActivity = async (group_id, actor_id, action_type, description, metadata = {}) => {
+const logActivity = async (group_id, user_id, activity_type, description) => {
   try {
     await supabase.from('activity_logs').insert([{
-      group_id, actor_id, action_type, description, metadata
+      group_id,
+      user_id,
+      activity_type,
+      description,
     }]);
   } catch (err) {
     console.warn("Gagal mencatat activity_log:", err.message);
@@ -65,8 +68,7 @@ export const splitBill = async (req, res) => {
 
     await logActivity(
       group_id, payer_id, 'BILL_CREATED',
-      `Tagihan baru: "${billDescription}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`,
-      { bill_id: bill.id, amount, category, split_count: nonPayerSplits.length }
+      `Tagihan baru: "${billDescription}" sebesar Rp${Number(amount).toLocaleString()} dibagi ke ${nonPayerSplits.length} anggota.`
     );
 
     return res.status(201).json({
