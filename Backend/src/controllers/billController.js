@@ -368,7 +368,7 @@ export const getBillHistory = async (req, res) => {
 
     const { data, error } = await supabase
       .from('bills')
-      .select('*, payer:profiles!bills_payer_id_fkey(full_name, username), group:group!bills_group_idfkey(group_name')
+      .select('*, payer:profiles!payer_id(full_name, username), group:groups!group_id(group_name)')
       .eq('group_id', group_id)
       .order('created_at', { ascending: false });
 
