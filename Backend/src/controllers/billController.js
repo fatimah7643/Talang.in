@@ -260,6 +260,11 @@ export const splitBillNLP = async (req, res) => {
       m.name.toLowerCase().includes(aiResult.paidBy?.toLowerCase()) ||
       aiResult.paidBy?.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
     )
+
+    // DEBUGGING 
+    console.log('AI paidBy:', aiResult.paidBy);
+    console.log('group_members:', group_members);
+
     const payerProfile = payerMember ? { id: payerMember.id } : null
 
     if (!payerProfile) {
