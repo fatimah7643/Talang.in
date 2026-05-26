@@ -18,6 +18,8 @@ import Riwayat from './pages/riwayat/Riwayat'
 import SimplifyDebt from './pages/simplify/SimplifyDebt'
 import SyaratKetentuan from './pages/legal/SyaratKetentuan'
 import KebijakanPrivasi from './pages/legal/KebijakanPrivasi'
+import ForgotPassword from './pages/auth/ForgotPassword'
+import ResetPassword from './pages/auth/ResetPassword'
 
 const App = () => {
   return (
@@ -27,6 +29,8 @@ const App = () => {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           {/* Protected routes dengan Layout */}
