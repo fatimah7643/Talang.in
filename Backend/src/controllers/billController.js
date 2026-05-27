@@ -226,7 +226,11 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
     const entities = aiResult.rawEntities || [];
     const correctedAmount = aiResult.amount;
-    const payerNorm = aiResult.paidBy?.toLowerCase();
+    // Handle paidBy sebagai string ATAU array (model baru bisa return array jika ada 2 payer)
+    const paidByRaw = Array.isArray(aiResult.paidBy)
+      ? aiResult.paidBy[0]           // ambil payer pertama jika array
+      : aiResult.paidBy ?? '';
+    const payerNorm = paidByRaw.toLowerCase();
 
     let finalParticipants = [];
     let finalSplitMethod = aiResult.splitMethod || 'equal';
@@ -278,7 +282,7 @@ export const splitBillNLP = async (req, res) => {
         finalSplitMethod = 'custom';
 
         // Distribusi sisa nominal untracked (misal baris item "es teh 6 10000")
-        const payerFirstName = aiResult.paidBy?.split(' ')[0];
+        const payerFirstName = paidByRaw.split(' ')[0];
         const adjustedMap = distributeRemainder(personAmountMap, correctedAmount, payerFirstName);
 
         finalParticipants = group_members
@@ -311,8 +315,8 @@ export const splitBillNLP = async (req, res) => {
 
     // Cari payer di profiles
     const payerMember = group_members.find(m => 
-      m.name.toLowerCase().includes(aiResult.paidBy?.toLowerCase()) ||
-      aiResult.paidBy?.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+      m.name.toLowerCase().includes(payerNorm) ||
+      payerNorm.includes(m.name.split(' ')[0].toLowerCase())
     )
 
     const payerProfile = payerMember ? { id: payerMember.id } : null
@@ -320,7 +324,7 @@ export const splitBillNLP = async (req, res) => {
     if (!payerProfile) {
       return res.status(400).json({
         success: false,
-        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di daftar anggota grup.`,
+        message: `Pembayar "${paidByRaw}" tidak ditemukan di daftar anggota grup.`,
         ai_parsed: aiResult
       });
     }
@@ -402,7 +406,7 @@ export const splitBillNLP = async (req, res) => {
       ai_parsed: {
         title:        billTitle,
         amount:       correctedAmount,
-        paidBy:       aiResult.paidBy,
+        paidBy:       paidByRaw,
         category:     aiResult.category,
         splitMethod:  finalSplitMethod,
         participants: finalParticipants
