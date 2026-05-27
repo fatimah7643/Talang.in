@@ -8,12 +8,13 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 // POST /api/v1/groups/create
 export const createGroup = async (req, res) => {
   try {
-    const { group_name, user_id } = req.body;
+    const { group_name } = req.body;
+    const user_id = req.user.id; // ambil dari JWT, bukan req.body
 
-    if (!group_name || !user_id) {
+    if (!group_name) {
       return res.status(400).json({
         success: false,
-        message: "Nama grup dan user_id wajib diisi!"
+        message: "Nama grup wajib diisi!"
       });
     }
 
@@ -179,9 +180,26 @@ export const removeMember = async (req, res) => {
 // GET /api/v1/groups
 export const getAllGroups = async (req, res) => {
   try {
+    const user_id = req.user.id;
+
+    // Ambil semua grup_id yang user ini ikuti sebagai member
+    const { data: memberships, error: memberError } = await supabase
+      .from('group_members')
+      .select('group_id')
+      .eq('profile_id', user_id);
+
+    if (memberError) throw memberError;
+
+    if (!memberships || memberships.length === 0) {
+      return res.status(200).json({ success: true, total: 0, data: [] });
+    }
+
+    const groupIds = memberships.map(m => m.group_id);
+
     const { data, error } = await supabase
       .from('groups')
       .select('*')
+      .in('id', groupIds)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -222,10 +240,10 @@ export const getGroupDetail = async (req, res) => {
   }
 };
 
-// GET /api/v1/groups/user/:user_id
+// GET /api/v1/groups/my-groups
 export const getGroupsByUser = async (req, res) => {
   try {
-    const { user_id } = req.params;
+    const user_id = req.user.id; // dari JWT, bukan URL params
 
     const { data, error } = await supabase
       .from('group_members')

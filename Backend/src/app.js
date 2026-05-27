@@ -14,13 +14,26 @@ import notificationRoutes from './routes/notificationRoutes.js';
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} tidak diizinkan`));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Server API Talang.in aktif! 🚀',
+    message: 'Server API Talang.in aktif!',
     version: 'v1',
     endpoints: [
       '/api/v1/auth',
