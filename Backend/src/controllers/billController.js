@@ -224,34 +224,24 @@ export const splitBillNLP = async (req, res) => {
     }
 
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
-    const entities = aiResult.rawEntities || [];
+    const entities       = aiResult.rawEntities || [];
     const correctedAmount = aiResult.amount;
+
     // Handle paidBy sebagai string ATAU array (model baru bisa return array jika ada 2 payer)
-    const paidByRaw = Array.isArray(aiResult.paidBy)
-      ? aiResult.paidBy[0]           // ambil payer pertama jika array
-      : aiResult.paidBy ?? '';
-    const payerNorm = paidByRaw.toLowerCase();
+    const paidByRaw  = Array.isArray(aiResult.paidBy) ? aiResult.paidBy[0] : (aiResult.paidBy ?? '');
+    const payerNorm  = paidByRaw.toLowerCase();
 
     let finalParticipants = [];
-    let finalSplitMethod = aiResult.splitMethod || 'equal';
+    let finalSplitMethod  = aiResult.splitMethod || 'equal';
 
-    if (aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
-      // AI sudah hitung semua (diskon, tax, qty) — langsung pakai
-      finalParticipants = aiResult.participants
-        .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
-        .map(p => {
-          const matched = group_members.find(m => 
-            m.name.toLowerCase().includes(p.name.toLowerCase()) ||
-            p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
-          )
-          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
-        })
-        .filter(p => p !== null);
+    const memberNames = group_members.map(m => m.name);
 
-    } else {
-      const memberNames = group_members.map(m => m.name);
+    // Priority 1: ekstrak per-person amounts langsung dari teks (paling akurat)
+    // Ini menangani format: "risna total 30000", "fatimah 20000", dll
+    let personAmountMap = extractPersonAmountsFromText(raw_text, memberNames);
 
-      const personAmountMap = {};
+    // Priority 2: jika teks tidak punya per-person, coba dari entities NER hasil AI
+    if (Object.keys(personAmountMap).length === 0) {
       for (let i = 0; i < entities.length; i++) {
         if (entities[i].label === 'PERSON') {
           const personName = entities[i].text;
@@ -264,54 +254,69 @@ export const splitBillNLP = async (req, res) => {
           }
         }
       }
+    }
 
-      if (Object.keys(personAmountMap).length === 0) {
-        const fallback = extractPersonAmountsFromText(raw_text, memberNames);
-        Object.assign(personAmountMap, fallback);
-      }
+    const hasCustom = Object.keys(personAmountMap).length > 0;
 
-      const allNominals = extractAllNominalsFromText(raw_text);
-      const explicitTotal = extractExplicitTotal(raw_text);
-      const maxNominal = allNominals.length > 0 ? Math.max(...allNominals) : 0;
+    // Priority 3: AI itemized — hanya dipakai jika text & entities tidak menemukan per-person amounts
+    // (kasus ini untuk struk/nota dengan diskon, qty, tax yang AI hitung sendiri)
+    if (!hasCustom && aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
+      finalSplitMethod  = 'itemized';
+      finalParticipants = aiResult.participants
+        .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
+        .map(p => {
+          const matched = group_members.find(m =>
+            m.name.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+          );
+          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null;
+        })
+        .filter(p => p !== null);
+
+    } else if (hasCustom) {
+      // Custom split: per-person amounts ditemukan dari teks atau entities
+      finalSplitMethod = 'custom';
+
+      // Distribusi sisa nominal untracked (misal baris item "es teh 6 10000")
+      // agar total splits = correctedAmount
+      const payerFirstName = paidByRaw.split(' ')[0];
+      const adjustedMap = distributeRemainder(personAmountMap, correctedAmount, payerFirstName);
+
+      finalParticipants = group_members
+        .map(m => {
+          const firstName  = m.name.split(' ')[0];
+          const matchedKey = Object.keys(adjustedMap).find(
+            k => k.toLowerCase() === firstName.toLowerCase() ||
+                 k.toLowerCase() === m.name.toLowerCase()
+          );
+          if (matchedKey && m.name.toLowerCase() !== payerNorm) {
+            return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] };
+          }
+          return null;
+        })
+        .filter(p => p !== null && p.amount > 0);
+
+    } else {
+      // Equal split: tidak ada info per-person sama sekali
+      finalSplitMethod = 'equal';
+      const allNominals    = extractAllNominalsFromText(raw_text);
+      const explicitTotal  = extractExplicitTotal(raw_text);
+      const maxNominal     = allNominals.length > 0 ? Math.max(...allNominals) : 0;
       const fallbackAmount = explicitTotal > 0
         ? explicitTotal
         : (aiResult.amount && aiResult.amount <= maxNominal ? aiResult.amount : maxNominal);
 
-      const hasCustom = Object.keys(personAmountMap).length > 0;
-      if (hasCustom) {
-        finalSplitMethod = 'custom';
-
-        // Distribusi sisa nominal untracked (misal baris item "es teh 6 10000")
-        const payerFirstName = paidByRaw.split(' ')[0];
-        const adjustedMap = distributeRemainder(personAmountMap, correctedAmount, payerFirstName);
-
-        finalParticipants = group_members
-          .map(m => {
-            const firstName = m.name.split(' ')[0];
-            const matchedKey = Object.keys(adjustedMap).find(
-              k => k.toLowerCase() === firstName.toLowerCase() ||
-                  k.toLowerCase() === m.name.toLowerCase()
-            );
-            if (matchedKey && m.name.toLowerCase() !== payerNorm) {
-              return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] };
-            }
-            return null;
-          })
-          .filter(p => p !== null && p.amount > 0);
-      } else {
-        finalSplitMethod = 'equal';
-        const debtors = group_members.filter(m => m.name.toLowerCase() !== payerNorm);
-        const equalShare = Math.floor(fallbackAmount / debtors.length);
-        const rem = fallbackAmount - equalShare * debtors.length;
-        finalParticipants = debtors.map((m, idx) => ({
-          id:     m.id,
-          name:   m.name,
-          amount: idx === 0 ? equalShare + rem : equalShare
-        }));
-      }
+      const debtors    = group_members.filter(m => m.name.toLowerCase() !== payerNorm);
+      const equalShare = Math.floor(fallbackAmount / debtors.length);
+      const rem        = fallbackAmount - equalShare * debtors.length;
+      finalParticipants = debtors.map((m, idx) => ({
+        id:     m.id,
+        name:   m.name,
+        amount: idx === 0 ? equalShare + rem : equalShare
+      }));
     }
 
-    // ── STEP 3: Simpan ke Database ──────────────────────────────
+        // ── STEP 3: Simpan ke Database ──────────────────────────────
 
     // Cari payer di profiles
     const payerMember = group_members.find(m => 
