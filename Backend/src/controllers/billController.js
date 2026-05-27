@@ -121,9 +121,13 @@ const extractAllNominalsFromText = (text) => {
 // Ekstrak nominal setelah kata "total" → "total 250000" → 250000
 const extractExplicitTotal = (text) => {
   const pattern = /total\s+(\d+(?:[.,]\d+)*(?:k|rb|ribu|juta|jt)?)/gi;
-  const match = pattern.exec(text);
-  if (match) return parseNominal(match[1]);
-  return 0;
+  let max = 0;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const val = parseNominal(match[1]);
+    if (val > max) max = val;
+  }
+  return max;
 };
 
 // Ambil 4 kata pertama sebagai judul singkat
@@ -216,7 +220,10 @@ export const splitBillNLP = async (req, res) => {
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
     const entities = aiResult.rawEntities || [];
     const correctedAmount = aiResult.amount;
-    const payerNorm = aiResult.paidBy?.toLowerCase();
+    const rawPaidBy = typeof aiResult.paidBy === 'string'
+      ? aiResult.paidBy
+      : (aiResult.paidBy?.name ?? aiResult.paidBy?.text ?? String(aiResult.paidBy ?? ''));
+    const payerNorm = rawPaidBy.toLowerCase();
 
     let finalParticipants = [];
     let finalSplitMethod = aiResult.splitMethod || 'equal';
@@ -296,16 +303,15 @@ export const splitBillNLP = async (req, res) => {
 
     // Cari payer di profiles
     const payerMember = group_members.find(m => 
-      m.name.toLowerCase().includes(aiResult.paidBy?.toLowerCase()) ||
-      aiResult.paidBy?.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
-    )
-
+      m.name.toLowerCase().includes(payerNorm) ||
+      payerNorm.includes(m.name.split(' ')[0].toLowerCase())
+    );
     const payerProfile = payerMember ? { id: payerMember.id } : null
 
     if (!payerProfile) {
       return res.status(400).json({
         success: false,
-        message: `Pembayar "${aiResult.paidBy}" tidak ditemukan di daftar anggota grup.`,
+        message: `Pembayar "${rawPaidBy}" tidak ditemukan di daftar anggota grup.`,
         ai_parsed: aiResult
       });
     }
