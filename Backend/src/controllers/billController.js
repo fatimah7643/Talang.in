@@ -131,22 +131,54 @@ const extractShortTitle = (text) => {
   return text.trim().split(/\s+/).slice(0, 4).join(' ').replace(/[.,!?]+$/, '');
 };
 
-// Fallback: ekstrak pasangan nama→nominal langsung dari raw_text
-// Handle: "bagian Risna 100rb", "Risna 100rb", "Risna: 100.000"
+// Ekstrak pasangan nama→nominal dari raw_text, parse per-baris
+// Handle: "risna total 30000", "fatimah 20000", "bagian Risna 100rb", "Risna: 100.000"
 const extractPersonAmountsFromText = (text, knownMembers) => {
   const result = {};
-  for (const member of knownMembers) {
-    const firstName = member.split(' ')[0];
-    const pattern = new RegExp(
-      `(?:bagian\\s+)?${firstName}[:\\s]+(?:sebesar\\s+)?(\\d+(?:[.,]\\d+)*(?:k|rb|ribu|juta|jt)?)`,
-      'gi'
-    );
-    const match = pattern.exec(text);
-    if (match) {
-      result[firstName] = parseNominal(match[1]);
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // Skip baris header yang menandakan siapa yang bayar (bukan split per-orang)
+  const payerKeywords = /dibayarin|dibayar|bayarin|bayar\s+oleh|ditagih/i;
+
+  for (const line of lines) {
+    if (payerKeywords.test(line)) continue;
+    for (const member of knownMembers) {
+      const firstName = member.split(' ')[0];
+      // ^ agar match dari awal baris, (?:total|sebesar)? agar handle "risna total 30000"
+      const pattern = new RegExp(
+        `^(?:bagian\\s+)?${firstName}[:\\s]+(?:(?:total|sebesar)\\s+)?(\\d+(?:[.,]\\d+)*(?:k|rb|ribu|juta|jt)?)`,
+        'i'
+      );
+      const match = pattern.exec(line);
+      if (match) {
+        result[firstName] = parseNominal(match[1]);
+        break; // satu baris = satu orang
+      }
     }
   }
   return result;
+};
+
+// Distribusi sisa nominal yang tidak teratribusi ke orang manapun (misal baris item "es teh 6 10000")
+// ke semua debtor secara merata agar total splits = totalAmount
+const distributeRemainder = (personAmountMap, totalAmount, payerFirstName) => {
+  const assignedTotal = Object.values(personAmountMap).reduce((a, b) => a + b, 0);
+  const remainder = totalAmount - assignedTotal;
+  if (remainder <= 0) return personAmountMap;
+
+  const debtors = Object.keys(personAmountMap).filter(
+    k => k.toLowerCase() !== payerFirstName?.toLowerCase()
+  );
+  if (debtors.length === 0) return personAmountMap;
+
+  const perPerson = Math.floor(remainder / debtors.length);
+  let extra = remainder - perPerson * debtors.length;
+
+  const updated = { ...personAmountMap };
+  for (const debtor of debtors) {
+    updated[debtor] = (updated[debtor] || 0) + perPerson + (extra > 0 ? 1 : 0);
+    if (extra > 0) extra--;
+  }
+  return updated;
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -244,15 +276,20 @@ export const splitBillNLP = async (req, res) => {
       const hasCustom = Object.keys(personAmountMap).length > 0;
       if (hasCustom) {
         finalSplitMethod = 'custom';
+
+        // Distribusi sisa nominal untracked (misal baris item "es teh 6 10000")
+        const payerFirstName = aiResult.paidBy?.split(' ')[0];
+        const adjustedMap = distributeRemainder(personAmountMap, correctedAmount, payerFirstName);
+
         finalParticipants = group_members
           .map(m => {
             const firstName = m.name.split(' ')[0];
-            const matchedKey = Object.keys(personAmountMap).find(
+            const matchedKey = Object.keys(adjustedMap).find(
               k => k.toLowerCase() === firstName.toLowerCase() ||
                   k.toLowerCase() === m.name.toLowerCase()
             );
             if (matchedKey && m.name.toLowerCase() !== payerNorm) {
-              return { id: m.id, name: m.name, amount: personAmountMap[matchedKey] };
+              return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] };
             }
             return null;
           })
