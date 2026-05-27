@@ -107,20 +107,35 @@ export const getHealthScore = async (req, res) => {
 
       // NOTIFIKASI: Hanya kirim jika health score turun drastis (misal >20 poin) atau masuk kategori 'Kritis'
       if (score < 50) {
-      const { data: members } = await supabase
-        .from('group_members')
-        .select('profile_id')
-        .eq('group_id', group_id)
+        const { data: members } = await supabase
+          .from('group_members')
+          .select('profile_id')
+          .eq('group_id', group_id)
 
-      await Promise.all((members || []).map(m =>
-        createNotification({
-          user_id: m.profile_id,
-          type:    'health',
-          title:   'Kesehatan Keuangan Grup Kritis',
-          message: `Skor grup kamu ${score}/100. Segera selesaikan hutang yang belum terbayar!`,
-        })
-      ))
-    }
+        const COOLDOWN_HOURS = 24
+        const cooldownTime = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60 * 1000).toISOString()
+
+        await Promise.all((members || []).map(async (m) => {
+          // Cek apakah notifikasi health untuk user ini sudah dikirim dalam 24 jam terakhir
+          const { data: recent } = await supabase
+            .from('notifications')
+            .select('id')
+            .eq('user_id', m.profile_id)
+            .eq('type', 'health')
+            .gte('created_at', cooldownTime)
+            .limit(1)
+
+          // Kalau belum ada, baru insert
+          if (!recent || recent.length === 0) {
+            await createNotification({
+              user_id: m.profile_id,
+              type:    'health',
+              title:   'Kesehatan Keuangan Grup Kritis',
+              message: `Skor grup kamu ${score}/100. Segera selesaikan hutang yang belum terbayar!`,
+            })
+          }
+        }))
+      }
 
     return res.status(200).json({
       success: true,
