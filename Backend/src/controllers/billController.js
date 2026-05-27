@@ -228,20 +228,48 @@ export const splitBillNLP = async (req, res) => {
     let finalParticipants = [];
     let finalSplitMethod = aiResult.splitMethod || 'equal';
 
-    if (aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
-      // AI sudah hitung semua (diskon, tax, qty) — langsung pakai
-      finalParticipants = aiResult.participants
-        .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
-        .map(p => {
-          const matched = group_members.find(m => 
-            m.name.toLowerCase().includes(p.name.toLowerCase()) ||
-            p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
-          )
-          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
-        })
-        .filter(p => p !== null);
+if (aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
+  const mapped = aiResult.participants
+    .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
+    .map(p => {
+      const matched = group_members.find(m => 
+        m.name.toLowerCase().includes(p.name.toLowerCase()) ||
+        p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+      );
+      return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null;
+    })
+    .filter(p => p !== null);
 
+  // Cek apakah AI gagal parse (semua amount sama = sebenarnya equal)
+  const allSame = mapped.length > 1 && mapped.every(p => p.amount === mapped[0].amount);
+
+  if (!allSame && mapped.length > 0) {
+    finalParticipants = mapped;
+  } else {
+    // AI gagal — re-parse dari raw_text
+    const memberNames = group_members.map(m => m.name);
+    const fallback = extractPersonAmountsFromText(raw_text, memberNames);
+    if (Object.keys(fallback).length > 0) {
+      finalSplitMethod = 'custom';
+      finalParticipants = group_members
+        .map(m => {
+          const firstName = m.name.split(' ')[0];
+          const matchedKey = Object.keys(fallback).find(
+            k => k.toLowerCase() === firstName.toLowerCase() ||
+                k.toLowerCase() === m.name.toLowerCase()
+          );
+          if (matchedKey && m.name.toLowerCase() !== payerNorm) {
+            return { id: m.id, name: m.name, amount: fallback[matchedKey] };
+          }
+          return null;
+        })
+        .filter(p => p !== null && p.amount > 0);
     } else {
+      finalParticipants = mapped;
+    }
+  }
+
+} else {
       const memberNames = group_members.map(m => m.name);
 
       const personAmountMap = {};
@@ -326,12 +354,16 @@ export const splitBillNLP = async (req, res) => {
       ? aiResult.title
       : extractShortTitle(raw_text);
 
+    const finalAmount = (finalSplitMethod !== 'equal' && finalParticipants.length > 0)
+      ? finalParticipants.reduce((sum, p) => sum + p.amount, 0)
+      : correctedAmount;
+
     const { data: billData, error: billError } = await supabase
       .from('bills')
       .insert([{
         group_id,
         payer_id:     payerProfile.id,
-        amount:       correctedAmount,
+        amount:       finalAmount,
         description:  billTitle,
         category:     aiResult.category || 'Lainnya',
         split_method: finalSplitMethod
@@ -368,7 +400,7 @@ export const splitBillNLP = async (req, res) => {
       group_id,
       payerProfile.id,
       'BILL_CREATED',
-      `Tagihan AI: "${bill.description}" sebesar Rp${correctedAmount.toLocaleString()} dibagi ke ${filteredSplitRows.length} anggota.`
+      `Tagihan AI: "${bill.description}" sebesar Rp${finalAmount.toLocaleString()} dibagi ke ${filteredSplitRows.length} anggota.`
     );
 
     await Promise.all(filteredSplitRows.map(s =>
