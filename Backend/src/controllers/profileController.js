@@ -144,6 +144,56 @@ export const uploadAvatar = async (req, res) => {
   }
 };
 
+// PUT /api/v1/profiles/me/change-password
+export const changePassword = async (req, res) => {
+  try {
+    const { current_password, new_password } = req.body;
+    const userEmail = req.user.email;
+
+    if (!current_password || !new_password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password saat ini dan password baru wajib diisi!'
+      });
+    }
+
+    if (new_password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password baru minimal 8 karakter!'
+      });
+    }
+
+    // Verifikasi password lama dengan mencoba login ulang
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: userEmail,
+      password: current_password,
+    });
+
+    if (signInError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password saat ini tidak sesuai!'
+      });
+    }
+
+    // Update password menggunakan admin client (service role)
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      req.user.id,
+      { password: new_password }
+    );
+
+    if (updateError) throw updateError;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Password berhasil diubah! Silakan login ulang.'
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // DELETE /api/v1/profiles/me
 export const deleteAccount = async (req, res) => {
   try {

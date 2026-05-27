@@ -2,6 +2,7 @@ import express from 'express';
 import { 
     getProfile, 
     updateProfile, 
+    changePassword,
     deleteAccount, 
     uploadAvatar, 
     uploadMiddleware 
@@ -12,6 +13,7 @@ const router = express.Router();
 
 router.get('/:profile_id', authenticate, getProfile); // GET /api/v1/profiles/:profile_id
 router.put('/:profile_id', authenticate, updateProfile);
+router.put('/me/change-password', authenticate, changePassword);
 router.post(
   '/:profile_id/avatar',
   authenticate,
