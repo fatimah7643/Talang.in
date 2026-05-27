@@ -206,29 +206,54 @@ const handleUploadAvatar = async () => {
     go()
   }, [user])
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     const errs = {}
     if (!editForm.name.trim())  errs.name  = 'Nama tidak boleh kosong'
-    if (!editForm.email.trim()) errs.email = 'Email tidak boleh kosong'
-    else if (!/\S+@\S+\.\S+/.test(editForm.email)) errs.email = 'Format email tidak valid'
+    if (!editForm.username.trim()) errs.username = 'Username tidak boleh kosong'
     if (Object.keys(errs).length) { setEditErrors(errs); return }
-    showToast('Fitur update profil belum tersedia', 'error')
+
+    try {
+      const res = await api.put(`/profiles/${user.id}`, {
+        full_name: editForm.name.trim(),
+        username:  editForm.username.trim(),
+      })
+
+      const updated = res.data?.data ?? res.data
+
+      setProfile(prev => ({ ...prev, ...updated }))
+      setEditErrors({})
+      showToast('Profil berhasil diperbarui!')
+    } catch (e) {
+      showToast(e?.response?.data?.message || 'Gagal menyimpan profil', 'error')
+    }
   }
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     const errs = {}
     if (!pwForm.current_password) errs.current_password = 'Masukkan password saat ini'
     if (!pwForm.new_password) errs.new_password = 'Masukkan password baru'
     else if (pwForm.new_password.length < 8) errs.new_password = 'Minimal 8 karakter'
     if (pwForm.new_password !== pwForm.confirm_password) errs.confirm_password = 'Password tidak cocok'
     if (Object.keys(errs).length) { setPwErrors(errs); return }
-    showToast('Fitur ganti password belum tersedia', 'error')
+
+    try {
+      await api.put('/profiles/me/change-password', {
+        current_password: pwForm.current_password,
+        new_password:     pwForm.new_password,
+      })
+      setPwForm({ current_password: '', new_password: '', confirm_password: '' })
+      setPwErrors({})
+      showToast('Password berhasil diubah! Silakan login ulang.')
+      setTimeout(() => { logout(); navigate('/login') }, 2000)
+    } catch (e) {
+      showToast(e?.response?.data?.message || 'Gagal mengubah password', 'error')
+    }
   }
 
   const handleDeleteAccount = async () => {
     if (deleteConfirm !== (profile?.email ?? '')) return
     try {
-      await api.delete('/users/me')
+      await api.delete('/profiles/me')
       logout(); navigate('/')
     } catch (e) {
       showToast(e?.response?.data?.message || 'Gagal menghapus akun', 'error')
@@ -330,11 +355,11 @@ const handleUploadAvatar = async () => {
             </div>
           </div>
           <button
-            onClick={() => { logout(); navigate('/login') }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-red-100 bg-red-50
-              text-sm font-semibold text-red-500 hover:bg-red-100 transition shrink-0"
+            onClick={() => document.getElementById('name')?.focus()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-100 bg-blue-50
+              text-sm font-semibold text-blue-600 hover:bg-blue-100 transition shrink-0"
           >
-            <LogOut size={14} /> Edit Profil
+            <User size={14} /> Edit Profil
           </button>
         </div>
 
