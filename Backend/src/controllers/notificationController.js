@@ -74,3 +74,37 @@ export const markAllAsRead = async (req, res) => {
     return res.status(500).json({ success: false, message: e.message })
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   DELETE /api/v1/notifications/:id
+═══════════════════════════════════════════════════════════════ */
+export const deleteNotification = async (req, res) => {
+  try {
+    const { id } = req.params
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', req.user.id)   // pastikan hanya milik user sendiri
+    if (error) throw error
+    return res.status(200).json({ success: true })
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message })
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DELETE /api/v1/notifications
+═══════════════════════════════════════════════════════════════ */
+export const deleteAllNotifications = async (req, res) => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('user_id', req.user.id)
+    if (error) throw error
+    return res.status(200).json({ success: true })
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message })
+  }
+}
