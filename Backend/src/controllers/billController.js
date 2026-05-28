@@ -24,7 +24,7 @@ const logActivity = async (group_id, user_id, activity_type, description) => {
 ═══════════════════════════════════════════════════════════════ */
 export const splitBill = async (req, res) => {
   try {
-    const { group_id, payer_id, amount, description, title, category, splits } = req.body;
+    const { group_id, payer_id, amount, description, title, category, splits, split_method } = req.body;
     const billDescription = description || title;
 
     if (!group_id || !payer_id || !amount || !billDescription || !splits || !Array.isArray(splits) || splits.length === 0) {
@@ -45,7 +45,7 @@ export const splitBill = async (req, res) => {
 
     const { data: billData, error: billError } = await supabase
       .from('bills')
-      .insert([{ group_id, payer_id, amount: Number(amount), description: billDescription, category: category || 'Lainnya' }])
+      .insert([{ group_id, payer_id, amount: Number(amount), description: billDescription, category: category || 'Lainnya', split_method: split_method || 'equal' }])
       .select();
 
     if (billError) throw billError;
