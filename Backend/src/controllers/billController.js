@@ -755,7 +755,7 @@ export const getBillSplits = async (req, res) => {
       .from('group_members')
       .select(`
         id,
-        profile:profiles (
+        profile:profiles!group_members_profile_id_fkey (
           full_name,
           username
         )
