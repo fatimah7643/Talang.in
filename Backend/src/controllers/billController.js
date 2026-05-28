@@ -236,6 +236,47 @@ const extractBulletItemAmounts = (text, knownMembers, payerFirstName) => {
   return result;
 };
 
+const extractSharedAdjustments = (text, participantCount) => {
+    let adjustmentPerPerson = 0;
+
+    const lines = text.split('\n');
+
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+
+      // Air mineral 5k x5
+      const multiMatch = lower.match(
+        /(\d+(?:[.,]\d+)*(?:k|rb|ribu|jt|juta)?)\s*x\s*(\d+)/i
+      );
+
+      if (multiMatch) {
+        const unitPrice = parseNominal(multiMatch[1]);
+        const qty = parseInt(multiMatch[2]);
+
+        const total = unitPrice * qty;
+        adjustmentPerPerson += Math.floor(total / participantCount);
+      }
+
+      // Diskon
+      if (lower.includes('diskon')) {
+        const nums = extractAllNominalsFromText(lower);
+        if (nums.length > 0) {
+          adjustmentPerPerson -= Math.floor(nums[0] / participantCount);
+        }
+      }
+
+      // Pajak
+      if (lower.includes('tax') || lower.includes('pajak')) {
+        const nums = extractAllNominalsFromText(lower);
+        if (nums.length > 0) {
+          adjustmentPerPerson += Math.floor(nums[0] / participantCount);
+        }
+      }
+    }
+
+    return adjustmentPerPerson;
+  };
+
 // Ekstrak pasangan nama→nominal dari raw_text
 const extractPersonAmountsFromText = (text, knownMembers) => {
   const result = {};
@@ -427,9 +468,48 @@ export const splitBillNLP = async (req, res) => {
         if (isPayerMatch(k, payerFirstName)) delete cleanedMap[k]
       })
 
-      const adjustedMap = hasSisanya
-        ? cleanedMap
-        : distributeRemainder(cleanedMap, correctedAmount, payerFirstName)
+      let adjustedMap = { ...cleanedMap };
+
+      if (hasSisanya) {
+        adjustedMap = distributeRemainder(
+          cleanedMap,
+          correctedAmount,
+          payerFirstName
+        );
+      }
+
+      // =====================================================
+      // APPLY SHARED ADJUSTMENTS
+      // =====================================================
+
+      const participantCount = group_members.length;
+
+      const adjustmentPerPerson =
+        extractSharedAdjustments(
+          raw_text,
+          participantCount
+        );
+
+      Object.keys(adjustedMap).forEach(k => {
+        adjustedMap[k] += adjustmentPerPerson;
+      });
+
+      // =====================================================
+      // VALIDASI TOTAL CUSTOM SPLIT
+      // =====================================================
+
+      const totalAssigned = Object.values(adjustedMap)
+        .reduce((a, b) => a + b, 0);
+
+      // Jika total assigned melebihi total bill,
+      // normalize / reject
+      if (totalAssigned > correctedAmount) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Total custom split (${totalAssigned}) melebihi total tagihan (${correctedAmount}).`
+        });
+      }
 
       // ─────────────────────────────────────────────────────────
       // FIX: Gunakan isPayerMatch() bukan perbandingan string langsung
@@ -539,7 +619,9 @@ export const splitBillNLP = async (req, res) => {
       })
     }
 
-    const filteredSplitRows = splitRows.filter(s => s.member_id !== payerProfile.id);
+    const filteredSplitRows = splitRows.filter(
+      s => s.member_id !== payerMember.id
+    );
 
     if (filteredSplitRows.length > 0) {
       const { error: splitError } = await supabase
@@ -668,19 +750,30 @@ export const getBillSplits = async (req, res) => {
     }
 
     const memberIds = splits.map(s => s.member_id);
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, username')
+
+    const { data: members } = await supabase
+      .from('group_members')
+      .select(`
+        id,
+        profile:profiles (
+          full_name,
+          username
+        )
+      `)
       .in('id', memberIds);
 
-    const profileMap = {};
-    (profiles || []).forEach(p => {
-      profileMap[p.id] = p.full_name || p.username || '—';
+    const memberMap = {};
+
+    (members || []).forEach(m => {
+      memberMap[m.id] =
+        m.profile?.full_name ||
+        m.profile?.username ||
+        '—';
     });
 
     const normalized = splits.map(s => ({
       ...s,
-      member_name: profileMap[s.member_id] || '—',
+      member_name: memberMap[s.member_id] || '—',
     }));
 
     return res.status(200).json({ success: true, data: normalized });
