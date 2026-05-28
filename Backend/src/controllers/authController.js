@@ -45,7 +45,7 @@ export const register = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registrasi berhasil! Silakan login. 🎉",
+      message: "Registrasi berhasil! Silakan login!",
       data: {
         user_id: userId,
         email: authData.user.email,
@@ -81,7 +81,7 @@ export const login = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Login berhasil! 🔓",
+      message: "Login berhasil!",
       access_token: data.session.access_token,
       user: {
         id: data.user.id,
