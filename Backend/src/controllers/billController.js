@@ -521,10 +521,12 @@ export const splitBillNLP = async (req, res) => {
           const firstName  = m.name.split(' ')[0]
           const matchedKey = Object.keys(adjustedMap).find(
             k => k.toLowerCase() === firstName.toLowerCase() ||
-                 k.toLowerCase() === m.name.toLowerCase()
+                k.toLowerCase() === m.name.toLowerCase()
           )
           if (matchedKey && !isPayerMatch(m.name, payerNorm)) {
-            return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] }
+            // Pastikan menggunakan profile_id milik user, atau fallback ke m.id jika skema foreign key mengarah ke group_members
+            const targetId = m.profile_id || m.id; 
+            return { id: targetId, name: m.name, amount: adjustedMap[matchedKey] }
           }
           return null
         })
@@ -738,34 +740,32 @@ export const getBillSplits = async (req, res) => {
   try {
     const { bill_id } = req.params;
 
-    // Lakukan join langsung dari bill_splits -> group_members -> profiles
+    // Melakukan pengambilan data split sekaligus men-join nama profilnya secara otomatis
     const { data: splits, error } = await supabase
       .from('bill_splits')
       .select(`
-        id, 
-        bill_id, 
-        member_id, 
-        share_amount, 
-        amount_paid, 
+        id,
+        bill_id,
+        member_id,
+        share_amount,
+        amount_paid,
         is_paid,
-        group_members!member_id (
-          id,
-          profiles (
-            full_name,
-            username
-          )
+        profiles!member_id (
+          full_name,
+          username
         )
       `)
       .eq('bill_id', bill_id);
 
     if (error) throw error;
 
-    // Lakukan mapping dengan aman
-    const normalized = (splits || []).map(s => {
-      // Ambil profile dari hasil join
-      const profile = s.group_members?.profiles;
-      const name = profile ? (profile.full_name || profile.username) : '—';
+    if (!splits || splits.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
 
+    // Lakukan normalisasi hasil join ke properti 'member_name'
+    const normalized = splits.map(s => {
+      const name = s.profiles ? (s.profiles.full_name || s.profiles.username) : '—';
       return {
         id: s.id,
         bill_id: s.bill_id,
@@ -773,7 +773,7 @@ export const getBillSplits = async (req, res) => {
         share_amount: s.share_amount,
         amount_paid: s.amount_paid,
         is_paid: s.is_paid,
-        member_name: name // Nama berhasil didapat atau fallback '—' jika benar-benar kosong
+        member_name: name
       };
     });
 
