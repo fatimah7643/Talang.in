@@ -99,17 +99,17 @@ export const splitBill = async (req, res) => {
 // Parse nominal dari string: "10k" → 10000, "300ribu" → 300000, dll
 const parseNominal = (str) => {
   if (!str) return 0;
-  const cleaned = str.toString().toLowerCase()
+  let cleaned = str.toString().toLowerCase().trim()
+  // Handle desimal Indonesia: "1,5jt" → "1.5jt" sebelum koma dihapus
+  cleaned = cleaned.replace(/(\d+),(\d)(k|rb|ribu|jt|juta)/i, '$1.$2$3')
+  cleaned = cleaned
     .replace(/\./g, '')
     .replace(/,/g, '')
-    .replace('ribu', '000')
-    .replace('rb',   '000')
-    .replace('k',    '000')
-    .replace('juta', '000000')
-    .replace('jt',   '000000')
-    .trim();
-  return parseInt(cleaned) || 0;
-};
+    .replace('ribu', '000').replace('rb', '000').replace('k', '000')
+    .replace('juta', '000000').replace('jt', '000000')
+    .trim()
+  return parseInt(cleaned) || 0
+}
 
 // Cari semua nominal dari teks
 const extractAllNominalsFromText = (text) => {
@@ -257,109 +257,102 @@ export const splitBillNLP = async (req, res) => {
     }
 
     // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
-    const entities       = aiResult.rawEntities || [];
-    // correctedAmount: prioritas explicit total dari teks > max nominal di teks > aiResult.amount
-    // Ini mencegah AI return amount yang salah (misal sum semua angka)
-    const allTextNominals   = extractAllNominalsFromText(raw_text);
-    const explicitTextTotal = extractExplicitTotal(raw_text);
-    const maxTextNominal    = allTextNominals.length > 0 ? Math.max(...allTextNominals) : 0;
+    const entities          = aiResult.rawEntities || []
+    const allTextNominals   = extractAllNominalsFromText(raw_text)
+    const explicitTextTotal = extractExplicitTotal(raw_text)
+    const maxTextNominal    = allTextNominals.length > 0 ? Math.max(...allTextNominals) : 0
 
-    let correctedAmount = aiResult.amount;
+    const paidByRaw = Array.isArray(aiResult.paidBy) ? aiResult.paidBy[0] : (aiResult.paidBy ?? '')
+    const payerNorm = paidByRaw.toLowerCase()
+    const memberNames = group_members.map(m => m.name)
 
-    if (explicitTextTotal > 0) {
-      // Ada keyword "total" di teks → pakai itu
-      correctedAmount = explicitTextTotal;
-    } else if (maxTextNominal > 0 && aiResult.amount > maxTextNominal) {
-      // AI inflated (lebih besar dari angka manapun di teks) → pakai max nominal
-      correctedAmount = maxTextNominal;
-    }
+    let correctedAmount   = aiResult.amount
+    let finalSplitMethod  = aiResult.splitMethod || 'equal'
+    let finalParticipants = []
+    let useAiDirectly     = false
 
-    // Handle paidBy sebagai string ATAU array (model baru bisa return array jika ada 2 payer)
-    const paidByRaw  = Array.isArray(aiResult.paidBy) ? aiResult.paidBy[0] : (aiResult.paidBy ?? '');
-    const payerNorm  = paidByRaw.toLowerCase();
-
-    let finalParticipants = [];
-    let finalSplitMethod  = aiResult.splitMethod || 'equal';
-
-    const memberNames = group_members.map(m => m.name);
-
-    // Priority 1: ekstrak per-person amounts langsung dari teks (paling akurat)
-    // Ini menangani format: "risna total 30000", "fatimah 20000", dll
-    let personAmountMap = extractPersonAmountsFromText(raw_text, memberNames);
-
-    // Priority 2: jika teks tidak punya per-person, coba dari entities NER hasil AI
-    if (Object.keys(personAmountMap).length === 0) {
-      for (let i = 0; i < entities.length; i++) {
-        if (entities[i].label === 'PERSON') {
-          const personName = entities[i].text;
-          for (let j = i + 1; j < entities.length; j++) {
-            if (entities[j].label === 'PRICE') {
-              personAmountMap[personName] = parseNominal(entities[j].text);
-              break;
-            }
-            if (entities[j].label === 'PERSON') break;
-          }
-        }
-      }
-    }
-
-    const hasCustom = Object.keys(personAmountMap).length > 0;
-
-    // Priority 3: AI itemized — hanya dipakai jika text & entities tidak menemukan per-person amounts
-    // (kasus ini untuk struk/nota dengan diskon, qty, tax yang AI hitung sendiri)
-    if (!hasCustom && aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
-      finalSplitMethod  = 'itemized';
-      finalParticipants = aiResult.participants
+    // Priority 0: AI return itemized dengan participants valid → langsung pakai, skip correction
+    if (aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
+      const mapped = aiResult.participants
         .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
         .map(p => {
           const matched = group_members.find(m =>
             m.name.toLowerCase().includes(p.name.toLowerCase()) ||
             p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
-          );
-          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null;
+          )
+          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
         })
-        .filter(p => p !== null);
+        .filter(Boolean)
 
-    } else if (hasCustom) {
-      // Custom split: per-person amounts ditemukan dari teks atau entities
-      finalSplitMethod = 'custom';
+      if (mapped.length > 0) {
+        finalSplitMethod  = 'itemized'
+        correctedAmount   = aiResult.amount   // trust AI, jangan di-override
+        finalParticipants = mapped
+        useAiDirectly     = true
+      }
+    }
 
-      // Distribusi sisa nominal untracked (misal baris item "es teh 6 10000")
-      // SKIP jika teks ada "sisanya" -> sisa adalah bagian payer sendiri, bukan item untracked
-      const payerFirstName = paidByRaw.split(' ')[0];
-      const hasSisanya = /sisanya|sisa\s+buat|sisa\s+gw|sisa\s+aku/i.test(raw_text);
-      const adjustedMap = hasSisanya
-        ? personAmountMap
-        : distributeRemainder(personAmountMap, correctedAmount, payerFirstName);
+    if (!useAiDirectly) {
+      // Amount correction — hanya untuk non-itemized
+      if (explicitTextTotal > 0) {
+        correctedAmount = explicitTextTotal
+      } else if (maxTextNominal > 0 && aiResult.amount > maxTextNominal) {
+        correctedAmount = maxTextNominal
+      }
 
-      finalParticipants = group_members
-        .map(m => {
-          const firstName  = m.name.split(' ')[0];
-          const matchedKey = Object.keys(adjustedMap).find(
-            k => k.toLowerCase() === firstName.toLowerCase() ||
-                 k.toLowerCase() === m.name.toLowerCase()
-          );
-          if (matchedKey && m.name.toLowerCase() !== payerNorm) {
-            return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] };
+      let personAmountMap = extractPersonAmountsFromText(raw_text, memberNames)
+
+      // Priority 2: coba dari entities NER jika text extraction kosong
+      if (Object.keys(personAmountMap).length === 0) {
+        for (let i = 0; i < entities.length; i++) {
+          if (entities[i].label === 'PERSON') {
+            const personName = entities[i].text
+            for (let j = i + 1; j < entities.length; j++) {
+              if (entities[j].label === 'PRICE') {
+                personAmountMap[personName] = parseNominal(entities[j].text)
+                break
+              }
+              if (entities[j].label === 'PERSON') break
+            }
           }
-          return null;
-        })
-        .filter(p => p !== null && p.amount > 0);
+        }
+      }
 
-    } else {
-      // Equal split: tidak ada info per-person sama sekali
-      finalSplitMethod = 'equal';
-      // Reuse allTextNominals & explicitTextTotal yang sudah dihitung di atas
-      const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal;
+      const hasCustom = Object.keys(personAmountMap).length > 0
 
-      const debtors    = group_members.filter(m => m.name.toLowerCase() !== payerNorm);
-      const equalShare = Math.floor(fallbackAmount / debtors.length);
-      const rem        = fallbackAmount - equalShare * debtors.length;
-      finalParticipants = debtors.map((m, idx) => ({
-        id:     m.id,
-        name:   m.name,
-        amount: idx === 0 ? equalShare + rem : equalShare
-      }));
+      if (hasCustom) {
+        finalSplitMethod = 'custom'
+        const payerFirstName = paidByRaw.split(' ')[0]
+        const hasSisanya = /sisanya|sisa\s+buat|sisa\s+gw|sisa\s+aku/i.test(raw_text)
+        const adjustedMap = hasSisanya
+          ? personAmountMap
+          : distributeRemainder(personAmountMap, correctedAmount, payerFirstName)
+
+        finalParticipants = group_members
+          .map(m => {
+            const firstName  = m.name.split(' ')[0]
+            const matchedKey = Object.keys(adjustedMap).find(
+              k => k.toLowerCase() === firstName.toLowerCase() ||
+                  k.toLowerCase() === m.name.toLowerCase()
+            )
+            if (matchedKey && m.name.toLowerCase() !== payerNorm) {
+              return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] }
+            }
+            return null
+          })
+          .filter(p => p !== null && p.amount > 0)
+
+      } else {
+        finalSplitMethod = 'equal'
+        const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal
+        const debtors    = group_members.filter(m => m.name.toLowerCase() !== payerNorm)
+        const equalShare = Math.floor(fallbackAmount / debtors.length)
+        const rem        = fallbackAmount - equalShare * debtors.length
+        finalParticipants = debtors.map((m, idx) => ({
+          id: m.id, name: m.name,
+          amount: idx === 0 ? equalShare + rem : equalShare
+        }))
+      }
     }
 
         // ── STEP 3: Simpan ke Database ──────────────────────────────
