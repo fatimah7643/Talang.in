@@ -22,10 +22,16 @@ const upload = multer({
  
 export const uploadMiddleware = upload.single('avatar');
 
+// Helper untuk resolve ID 'me' menjadi user ID yang sebenarnya
+const resolveId = (req) => {
+  const id = req.params?.profile_id;
+  return (!id || id === 'me') ? req.user?.id : id;
+};
+
 // GET /api/v1/profiles/:profile_id
 export const getProfile = async (req, res) => {
   try {
-    const { profile_id } = req.params;
+    const profile_id = resolveId(req);
 
     const { data, error } = await supabase
       .from('profiles')
@@ -36,7 +42,9 @@ export const getProfile = async (req, res) => {
     if (error) throw error;
 
     if (!data) {
-      return res.status(404).json({ success: false, message: "Profil tidak ditemukan!" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Profil tidak ditemukan!" });
     }
 
     return res.status(200).json({
@@ -52,7 +60,7 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    const { profile_id } = req.params;
+    const profile_id = resolveId(req);
     const { full_name, username, avatar_url } = req.body;
 
     if (req.user.id !== profile_id) {
