@@ -738,53 +738,44 @@ export const getBillSplits = async (req, res) => {
   try {
     const { bill_id } = req.params;
 
+    // Lakukan join langsung dari bill_splits -> group_members -> profiles
     const { data: splits, error } = await supabase
       .from('bill_splits')
-      .select('id, bill_id, member_id, share_amount, amount_paid, is_paid')
+      .select(`
+        id, 
+        bill_id, 
+        member_id, 
+        share_amount, 
+        amount_paid, 
+        is_paid,
+        group_members!member_id (
+          id,
+          profiles (
+            full_name,
+            username
+          )
+        )
+      `)
       .eq('bill_id', bill_id);
 
     if (error) throw error;
 
-    if (!splits || splits.length === 0) {
-      return res.status(200).json({ success: true, data: [] });
-    }
+    // Lakukan mapping dengan aman
+    const normalized = (splits || []).map(s => {
+      // Ambil profile dari hasil join
+      const profile = s.group_members?.profiles;
+      const name = profile ? (profile.full_name || profile.username) : '—';
 
-    const memberIds = splits.map(s => s.member_id);
-
-    const { data: members } = await supabase
-      .from('group_members')
-      .select('id, profile_id')
-      .in('id', memberIds);
-
-    const profileIds = (members || [])
-      .map(m => m.profile_id)
-      .filter(Boolean);
-
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, username')
-      .in('id', profileIds);
-
-    const profileMap = {};
-
-    (profiles || []).forEach(p => {
-      profileMap[p.id] =
-        p.full_name ||
-        p.username ||
-        '—';
+      return {
+        id: s.id,
+        bill_id: s.bill_id,
+        member_id: s.member_id,
+        share_amount: s.share_amount,
+        amount_paid: s.amount_paid,
+        is_paid: s.is_paid,
+        member_name: name // Nama berhasil didapat atau fallback '—' jika benar-benar kosong
+      };
     });
-
-    const memberMap = {};
-
-    (members || []).forEach(m => {
-      memberMap[m.id] =
-        profileMap[m.profile_id] || '—';
-    });
-
-    const normalized = splits.map(s => ({
-      ...s,
-      member_name: memberMap[s.member_id] || '—',
-    }));
 
     return res.status(200).json({ success: true, data: normalized });
   } catch (error) {
