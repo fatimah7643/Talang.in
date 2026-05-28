@@ -256,104 +256,108 @@ export const splitBillNLP = async (req, res) => {
       });
     }
 
-    // ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
-    const entities          = aiResult.rawEntities || []
-    const allTextNominals   = extractAllNominalsFromText(raw_text)
-    const explicitTextTotal = extractExplicitTotal(raw_text)
-    const maxTextNominal    = allTextNominals.length > 0 ? Math.max(...allTextNominals) : 0
+// ── STEP 2: VALIDATION & CORRECTION LAYER ───────────────────
+const entities          = aiResult.rawEntities || []
+const allTextNominals   = extractAllNominalsFromText(raw_text)
+const explicitTextTotal = extractExplicitTotal(raw_text)
+const maxTextNominal    = allTextNominals.length > 0 ? Math.max(...allTextNominals) : 0
 
-    const paidByRaw = Array.isArray(aiResult.paidBy) ? aiResult.paidBy[0] : (aiResult.paidBy ?? '')
-    const payerNorm = paidByRaw.toLowerCase()
-    const memberNames = group_members.map(m => m.name)
+const paidByRaw = Array.isArray(aiResult.paidBy) ? aiResult.paidBy[0] : (aiResult.paidBy ?? '')
+const payerNorm = paidByRaw.toLowerCase()
+const memberNames = group_members.map(m => m.name)
 
-    let correctedAmount   = aiResult.amount
-    let finalSplitMethod  = aiResult.splitMethod || 'equal'
-    let finalParticipants = []
-    let useAiDirectly     = false
+let correctedAmount   = aiResult.amount
+let finalSplitMethod  = aiResult.splitMethod || 'equal'
+let finalParticipants = []
 
-    // Priority 0: AI return itemized dengan participants valid → langsung pakai, skip correction
-    if (aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
-      const mapped = aiResult.participants
-        .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
-        .map(p => {
-          const matched = group_members.find(m =>
-            m.name.toLowerCase().includes(p.name.toLowerCase()) ||
-            p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
-          )
-          return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
-        })
-        .filter(Boolean)
+// Cek text extraction DULU
+let personAmountMap = extractPersonAmountsFromText(raw_text, memberNames)
 
-      if (mapped.length > 0) {
-        finalSplitMethod  = 'itemized'
-        correctedAmount   = aiResult.amount   // trust AI, jangan di-override
-        finalParticipants = mapped
-        useAiDirectly     = true
-      }
-    }
-
-    if (!useAiDirectly) {
-      // Amount correction — hanya untuk non-itemized
-      if (explicitTextTotal > 0) {
-        correctedAmount = explicitTextTotal
-      } else if (maxTextNominal > 0 && aiResult.amount > maxTextNominal) {
-        correctedAmount = maxTextNominal
-      }
-
-      let personAmountMap = extractPersonAmountsFromText(raw_text, memberNames)
-
-      // Priority 2: coba dari entities NER jika text extraction kosong
-      if (Object.keys(personAmountMap).length === 0) {
-        for (let i = 0; i < entities.length; i++) {
-          if (entities[i].label === 'PERSON') {
-            const personName = entities[i].text
-            for (let j = i + 1; j < entities.length; j++) {
-              if (entities[j].label === 'PRICE') {
-                personAmountMap[personName] = parseNominal(entities[j].text)
-                break
-              }
-              if (entities[j].label === 'PERSON') break
-            }
-          }
+// Fallback ke entities NER jika text kosong
+if (Object.keys(personAmountMap).length === 0) {
+  for (let i = 0; i < entities.length; i++) {
+    if (entities[i].label === 'PERSON') {
+      const personName = entities[i].text
+      for (let j = i + 1; j < entities.length; j++) {
+        if (entities[j].label === 'PRICE') {
+          personAmountMap[personName] = parseNominal(entities[j].text)
+          break
         }
-      }
-
-      const hasCustom = Object.keys(personAmountMap).length > 0
-
-      if (hasCustom) {
-        finalSplitMethod = 'custom'
-        const payerFirstName = paidByRaw.split(' ')[0]
-        const hasSisanya = /sisanya|sisa\s+buat|sisa\s+gw|sisa\s+aku/i.test(raw_text)
-        const adjustedMap = hasSisanya
-          ? personAmountMap
-          : distributeRemainder(personAmountMap, correctedAmount, payerFirstName)
-
-        finalParticipants = group_members
-          .map(m => {
-            const firstName  = m.name.split(' ')[0]
-            const matchedKey = Object.keys(adjustedMap).find(
-              k => k.toLowerCase() === firstName.toLowerCase() ||
-                  k.toLowerCase() === m.name.toLowerCase()
-            )
-            if (matchedKey && m.name.toLowerCase() !== payerNorm) {
-              return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] }
-            }
-            return null
-          })
-          .filter(p => p !== null && p.amount > 0)
-
-      } else {
-        finalSplitMethod = 'equal'
-        const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal
-        const debtors    = group_members.filter(m => m.name.toLowerCase() !== payerNorm)
-        const equalShare = Math.floor(fallbackAmount / debtors.length)
-        const rem        = fallbackAmount - equalShare * debtors.length
-        finalParticipants = debtors.map((m, idx) => ({
-          id: m.id, name: m.name,
-          amount: idx === 0 ? equalShare + rem : equalShare
-        }))
+        if (entities[j].label === 'PERSON') break
       }
     }
+  }
+}
+
+const hasCustomFromText = Object.keys(personAmountMap).length > 0
+
+if (!hasCustomFromText && aiResult.splitMethod === 'itemized' && aiResult.participants?.length > 0) {
+  // Priority itemized: HANYA jika text tidak punya per-person amounts
+  // (kasus struk kompleks dengan diskon/tax/multiplier)
+  const mapped = aiResult.participants
+    .filter(p => p.name?.toLowerCase() !== payerNorm && p.amount > 0)
+    .map(p => {
+      const matched = group_members.find(m =>
+        m.name.toLowerCase().includes(p.name.toLowerCase()) ||
+        p.name.toLowerCase().includes(m.name.split(' ')[0].toLowerCase())
+      )
+      return matched ? { id: matched.id, name: matched.name, amount: p.amount } : null
+    })
+    .filter(Boolean)
+
+  if (mapped.length > 0) {
+    finalSplitMethod  = 'itemized'
+    correctedAmount   = aiResult.amount  // trust AI amount untuk kasus ini
+    finalParticipants = mapped
+  }
+
+} else if (hasCustomFromText) {
+  // Custom dari text extraction
+  if (explicitTextTotal > 0) {
+    correctedAmount = explicitTextTotal
+  } else if (maxTextNominal > 0 && aiResult.amount > maxTextNominal) {
+    correctedAmount = maxTextNominal
+  }
+
+  finalSplitMethod = 'custom'
+  const payerFirstName = paidByRaw.split(' ')[0]
+  const hasSisanya = /sisanya|sisa\s+buat|sisa\s+gw|sisa\s+aku/i.test(raw_text)
+  const adjustedMap = hasSisanya
+    ? personAmountMap
+    : distributeRemainder(personAmountMap, correctedAmount, payerFirstName)
+
+  finalParticipants = group_members
+    .map(m => {
+      const firstName  = m.name.split(' ')[0]
+      const matchedKey = Object.keys(adjustedMap).find(
+        k => k.toLowerCase() === firstName.toLowerCase() ||
+             k.toLowerCase() === m.name.toLowerCase()
+      )
+      if (matchedKey && m.name.toLowerCase() !== payerNorm) {
+        return { id: m.id, name: m.name, amount: adjustedMap[matchedKey] }
+      }
+      return null
+    })
+    .filter(p => p !== null && p.amount > 0)
+
+} else {
+  // Equal fallback
+  if (explicitTextTotal > 0) {
+    correctedAmount = explicitTextTotal
+  } else if (maxTextNominal > 0 && aiResult.amount > maxTextNominal) {
+    correctedAmount = maxTextNominal
+  }
+
+  finalSplitMethod = 'equal'
+  const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal
+  const debtors    = group_members.filter(m => m.name.toLowerCase() !== payerNorm)
+  const equalShare = Math.floor(fallbackAmount / debtors.length)
+  const rem        = fallbackAmount - equalShare * debtors.length
+  finalParticipants = debtors.map((m, idx) => ({
+    id: m.id, name: m.name,
+    amount: idx === 0 ? equalShare + rem : equalShare
+  }))
+}
 
         // ── STEP 3: Simpan ke Database ──────────────────────────────
 
