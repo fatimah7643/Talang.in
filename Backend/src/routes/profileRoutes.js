@@ -11,15 +11,21 @@ import { authenticate } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/:profile_id', authenticate, getProfile); // GET /api/v1/profiles/:profile_id
-router.put('/:profile_id', authenticate, updateProfile);
-router.put('/me/change-password', authenticate, changePassword);
+router.get('/me',                  authenticate, getProfile);       // GET /api/v1/profiles/:profile_id
+router.put('/me',                  authenticate, updateProfile);
+router.put('/me/change-password',  authenticate, changePassword);
+router.delete('/me',               authenticate, deleteAccount);
 router.post(
-  '/:profile_id/avatar',
+  '/me/avatar',
   authenticate,
   uploadMiddleware,
   uploadAvatar
 );
-router.delete('/me', authenticate, deleteAccount);
+
+
+// Route dengan param — di bawah semua route /me
+router.get('/:profile_id',         authenticate, getProfile);           // GET  /api/v1/profiles/:id
+router.put('/:profile_id',         authenticate, updateProfile);        // PUT  /api/v1/profiles/:id
+router.post('/:profile_id/avatar', authenticate, uploadMiddleware, uploadAvatar); // POST /api/v1/profiles/:id/avatar
 
 export default router;
