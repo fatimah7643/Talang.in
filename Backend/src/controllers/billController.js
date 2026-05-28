@@ -755,7 +755,8 @@ export const getBillSplits = async (req, res) => {
       .from('group_members')
       .select(`
         id,
-        profile:profiles!group_members_profile_id_fkey (
+        profile_id 
+        profile (
           full_name,
           username
         )
@@ -766,8 +767,8 @@ export const getBillSplits = async (req, res) => {
 
     (members || []).forEach(m => {
       memberMap[m.id] =
-        m.profile?.full_name ||
-        m.profile?.username ||
+        m.profiles?.full_name ||
+        m.profiles?.username ||
         '—';
     });
 
