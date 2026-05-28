@@ -99,17 +99,26 @@ export const splitBill = async (req, res) => {
 // Parse nominal dari string: "10k" → 10000, "300ribu" → 300000, dll
 const parseNominal = (str) => {
   if (!str) return 0;
-  let cleaned = str.toString().toLowerCase().trim()
-  // Handle desimal Indonesia: "1,5jt" → "1.5jt" sebelum koma dihapus
-  cleaned = cleaned.replace(/(\d+),(\d)(k|rb|ribu|jt|juta)/i, '$1.$2$3')
+  let cleaned = str.toString().toLowerCase().trim();
+
+  // Handle desimal: "1,5jt" atau "1.5jt" -> ubah jadi float dulu
+  const multiplierMatch = cleaned.match(/^([\d,.]+)\s*(k|rb|ribu|jt|juta)$/i);
+  if (multiplierMatch) {
+    let num = parseFloat(multiplierMatch[1].replace(',', '.'));
+    const unit = multiplierMatch[2];
+    if (unit === 'k' || unit === 'rb' || unit === 'ribu') num *= 1000;
+    if (unit === 'jt' || unit === 'juta') num *= 1000000;
+    return Math.floor(num);
+  }
+
   cleaned = cleaned
     .replace(/\./g, '')
     .replace(/,/g, '')
     .replace('ribu', '000').replace('rb', '000').replace('k', '000')
     .replace('juta', '000000').replace('jt', '000000')
-    .trim()
-  return parseInt(cleaned) || 0
-}
+    .trim();
+  return parseInt(cleaned) || 0;
+};
 
 // Cari semua nominal dari teks
 const extractAllNominalsFromText = (text) => {
@@ -165,7 +174,7 @@ const extractPersonAmountsFromText = (text, knownMembers) => {
     // Pecah dulu per koma/titik, baru filter payer per-segmen
     // Ini agar "dibayarin X total 100rb. risna 35rb, fatimah 40rb"
     // tidak skip seluruh baris hanya karena ada "dibayarin" di segmen pertama
-    const parts = line.split(/[,.]/).map(p => p.trim()).filter(Boolean);
+    const parts = line.split(/,(?!\d)/).map(p => p.trim()).filter(Boolean);
     for (const part of parts) {
       if (payerKeywords.test(part)) continue; // skip segmen payer saja
       if (part) segments.push(part);
@@ -240,7 +249,7 @@ export const splitBillNLP = async (req, res) => {
       body: JSON.stringify({ 
         text: raw_text, 
         entities: [],
-        group_members: sortedMembers.map(m => m.name)
+        group_members: sortedMembers.map(m => m.name.split(' ')[0])
       })
     });
 
