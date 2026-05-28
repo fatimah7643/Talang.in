@@ -753,23 +753,32 @@ export const getBillSplits = async (req, res) => {
 
     const { data: members } = await supabase
       .from('group_members')
-      .select(`
-        id,
-        profile_id 
-        profile (
-          full_name,
-          username
-        )
-      `)
+      .select('id, profile_id')
       .in('id', memberIds);
+
+    const profileIds = (members || [])
+      .map(m => m.profile_id)
+      .filter(Boolean);
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, username')
+      .in('id', profileIds);
+
+    const profileMap = {};
+
+    (profiles || []).forEach(p => {
+      profileMap[p.id] =
+        p.full_name ||
+        p.username ||
+        '—';
+    });
 
     const memberMap = {};
 
     (members || []).forEach(m => {
       memberMap[m.id] =
-        m.profiles?.full_name ||
-        m.profiles?.username ||
-        '—';
+        profileMap[m.profile_id] || '—';
     });
 
     const normalized = splits.map(s => ({
