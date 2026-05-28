@@ -186,28 +186,42 @@ export const splitBillNLP = async (req, res) => {
     }
 
     // ── STEP 3: Mapping Participants & Calculation ──────────────
-    const finalSplitMethod = aiResult.splitMethod || 'equal';
     const totalAmount = parseNominal(aiResult.amount);
+    const aiParticipants = aiResult.participants || [];
+    
+    // Infer split method: Jika AI kasih nominal per orang, jangan pakai 'equal'
+    let finalSplitMethod = aiResult.splitMethod;
+    const hasParticipantAmounts = aiParticipants.some(p => parseNominal(p.amount) > 0);
+    
+    if (hasParticipantAmounts) {
+      finalSplitMethod = (finalSplitMethod === 'equal') ? 'custom' : (finalSplitMethod || 'custom');
+    } else {
+      finalSplitMethod = finalSplitMethod || 'equal';
+    }
+
     let finalParticipants = [];
 
     if (finalSplitMethod === 'equal') {
       // Logic equal: bagi rata ke semua peserta yang disebutkan AI, atau ke semua member jika AI tidak spesifik
-      let participantNames = (aiResult.participants || []).map(p => p.name.toLowerCase());
+      let participantNames = aiParticipants.map(p => p.name.toLowerCase());
       
       let targetMembers = group_members;
       if (participantNames.length > 0) {
         targetMembers = group_members.filter(m => {
           const name = (typeof m === 'string' ? m : m.name).toLowerCase();
-          return participantNames.includes(name) || participantNames.some(pn => name.includes(pn));
+          // Match jika nama lengkap sama, atau mengandung nama dari AI, atau AI mengandung nama depan member
+          return participantNames.includes(name) || 
+                 participantNames.some(pn => name.includes(pn) || pn.includes(name.split(' ')[0]));
         });
       }
 
       if (targetMembers.length === 0) targetMembers = group_members;
 
-      const nonPayerMembers = targetMembers.filter(m => m.id !== payerMember.id);
       const groupCount = targetMembers.length;
       const share = Math.floor(totalAmount / groupCount);
       const remainder = totalAmount - (share * groupCount);
+
+      const nonPayerMembers = targetMembers.filter(m => m.id !== payerMember.id);
 
       // Pastikan remainder ditaruh ke salah satu non-payer agar billAmount benar
       finalParticipants = nonPayerMembers.map((m, idx) => ({
@@ -217,11 +231,13 @@ export const splitBillNLP = async (req, res) => {
       }));
     } else {
       // Logic custom/itemized: gunakan data per-orang dari AI
-      finalParticipants = (aiResult.participants || [])
+      finalParticipants = aiParticipants
         .map(p => {
           const matched = group_members.find(m => {
             const name = (typeof m === 'string' ? m : m.name).toLowerCase();
-            return name === p.name.toLowerCase() || name.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(name.split(' ')[0]);
+            return name === p.name.toLowerCase() || 
+                   name.includes(p.name.toLowerCase()) || 
+                   p.name.toLowerCase().includes(name.split(' ')[0]);
           });
           return matched ? { id: matched.id, name: typeof matched === 'string' ? matched : matched.name, amount: parseNominal(p.amount) } : null;
         })
