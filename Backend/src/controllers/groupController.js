@@ -253,7 +253,8 @@ export const getGroupsByUser = async (req, res) => {
         groups (
           id,
           group_name,
-          created_at
+          created_at,
+          member_count:group_members(count)
         )
       `)
       .eq('profile_id', user_id);
