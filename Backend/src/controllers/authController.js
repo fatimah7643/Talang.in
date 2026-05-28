@@ -45,7 +45,7 @@ export const register = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registrasi berhasil! Silakan login!",
+      message: "Registrasi berhasil! Silakan login. 🎉",
       data: {
         user_id: userId,
         email: authData.user.email,
@@ -81,7 +81,7 @@ export const login = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Login berhasil!",
+      message: "Login berhasil! 🔓",
       access_token: data.session.access_token,
       user: {
         id: data.user.id,
@@ -101,8 +101,8 @@ export const googleLogin = async (req, res) => {
       provider: 'google',
       options: {
         // Arahkan Google balik ke endpoint callback di Railway ini
-        redirectTo: `${process.env.BACKEND_URL}/api/v1/auth/google/callback`,
-      }
+        redirectTo: `${process.env.BACKEND_URL || 'https://talangin-production.up.railway.app'}/api/v1/auth/google/callback`,
+      },
     });
 
     if (error) throw error;
@@ -120,7 +120,7 @@ export const googleCallback = async (req, res) => {
 
   // Jika code tidak dikirim oleh Google, balikkan ke frontend dengan pesan error
   if (!code) {
-    return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code_from_google`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=no_code_from_google`);
   }
 
   try {
@@ -163,9 +163,9 @@ export const googleCallback = async (req, res) => {
     }));
     
     // Alihkan user ke frontend localhost sambil membawa token & data user di URL query
-    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?token=${session.access_token}&user=${userData}`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard?token=${session.access_token}&user=${userData}`);
   } catch (error) {
     console.error("OAuth Callback Error:", error.message);
-    return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=oauth_failed`);
   }
 };
