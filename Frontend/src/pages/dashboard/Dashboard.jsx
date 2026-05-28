@@ -306,11 +306,12 @@ export default function Dashboard() {
     const run = async () => {
       setLoading(true); setError('')
       try {
-        const grupRes = await api.get(`/groups/user/${user.id}`)
+        const grupRes = await api.get("/groups/my-groups")
         const raw = grupRes.data?.data ?? grupRes.data ?? []
         const list = raw.map(item => ({
           id:   item.groups?.id,
           name: item.groups?.group_name || '—',
+          member_count: item.groups?.member_count?.[0]?.count ?? 0,
         }))
         setGrupList(list)
 

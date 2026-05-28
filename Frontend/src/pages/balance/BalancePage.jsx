@@ -513,7 +513,7 @@ export default function BalancePage() {
   // Fetch grup milik user (bukan semua grup)
   useEffect(() => {
     if (!user?.id) return
-    api.get(`/groups/user/${user.id}`)
+    api.get("/groups/my-groups")
       .then(r => {
         const raw = r.data?.data || r.data || []
         // Response: [{ role, joined_at, groups: { id, group_name } }]

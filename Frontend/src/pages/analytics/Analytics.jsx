@@ -8,6 +8,7 @@ import {
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { fmt } from "../../utils/format";
+import { useNavigate } from "react-router-dom";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -157,57 +158,217 @@ function ConflictCard({ conflict, idx }) {
 // ─── Generate insights & recommendations (frontend logic, no dummy data) ──────
 function generateInsights(health, conflicts) {
   const insights = [];
-  const score = health?.score ?? 0;
+  const score        = health?.score ?? 0;
+  const paid         = health?.paid ?? 0;
+  const totalSplits  = health?.total_splits ?? 0;
+  const unpaid       = health?.unpaid ?? 0;
+  const debtRatio    = health?.debt_ratio ?? 0;
+  const totalMembers = health?.total_members ?? 0;
+  const activeMembers= health?.active_members ?? 0;
+  const totalBills   = health?.total_bills ?? 0;
+  const totalAmount  = health?.total_amount ?? 0;
+  const members      = health?.member_contributions ?? [];
 
+  // ── Health score narrative ──
   if (score >= 80) {
-    insights.push({ type: "achievement", title: "Grup Sangat Sehat!", summary: `Health score grup ${score}/100 — pembayaran berjalan lancar dan merata.`, detail: "Pertahankan pola ini agar keuangan grup tetap transparan dan adil." });
+    insights.push({
+      type: "achievement",
+      title: "Grup Sangat Sehat!",
+      summary: `Health score ${score}/100 — ${paid} dari ${totalSplits} tagihan sudah lunas. Pembayaran berjalan lancar.`,
+      detail: "Pertahankan pola ini. Grup yang sehat secara finansial cenderung lebih harmonis dan saling percaya. Bagikan pencapaian ini ke anggota!"
+    });
   } else if (score >= 60) {
-    insights.push({ type: "info", title: "Grup Cukup Sehat", summary: `Health score ${score}/100 — ada beberapa hal yang perlu diperhatikan.`, detail: "Cek tab Konflik untuk melihat apa yang perlu diperbaiki." });
+    insights.push({
+      type: "info",
+      title: "Grup Cukup Sehat",
+      summary: `Health score ${score}/100 — masih ada ${unpaid} tagihan belum lunas dari total ${totalSplits}.`,
+      detail: "Kondisi keuangan grup terbilang baik, namun ada beberapa hutang yang perlu diselesaikan. Cek tab Konflik untuk melihat apakah ada ketidakseimbangan pembayaran."
+    });
   } else if (score >= 40) {
-    insights.push({ type: "warning", title: "Perlu Perhatian", summary: `Health score ${score}/100 — kondisi keuangan grup kurang seimbang.`, detail: "Segera selesaikan hutang yang tertunggak dan perhatikan distribusi pembayaran." });
+    insights.push({
+      type: "warning",
+      title: "Perlu Perhatian",
+      summary: `Health score ${score}/100 — ${Math.round(debtRatio * 100)}% dari total tagihan belum terbayar.`,
+      detail: `Sebanyak ${unpaid} dari ${totalSplits} tagihan masih tertunggak. Gunakan fitur Simplify Debt untuk merapikan hutang yang ada dengan jumlah transfer paling minimal.`
+    });
+  } else if (totalSplits === 0) {
+    insights.push({
+      type: "info",
+      title: "Belum Ada Transaksi",
+      summary: "Grup ini belum memiliki transaksi yang tercatat.",
+      detail: "Mulai catat pengeluaran bersama pertama kalian! Kamu bisa pakai fitur AI Input untuk mencatat dengan cara yang lebih cepat dan mudah."
+    });
   } else {
-    insights.push({ type: "negative", title: "Kondisi Kritis", summary: `Health score ${score}/100 — ada masalah serius dalam grup.`, detail: "Segera komunikasikan dengan anggota grup dan selesaikan hutang yang ada." });
+    insights.push({
+      type: "negative",
+      title: "Kondisi Kritis",
+      summary: `Health score ${score}/100 — ${Math.round(debtRatio * 100)}% hutang belum terbayar dari ${totalSplits} tagihan.`,
+      detail: "Segera komunikasikan dengan semua anggota grup. Gunakan Simplify Debt untuk menyederhanakan proses pelunasan dan hindari konflik yang tidak perlu."
+    });
   }
 
-  const activeDebts = health?.active_debts ?? 0;
-  if (activeDebts > 0) {
-    insights.push({ type: "warning", title: "Ada Hutang Belum Lunas", summary: `${activeDebts} hutang aktif belum diselesaikan dalam grup.`, detail: "Gunakan fitur Simplify Debt untuk meminimalkan jumlah transfer yang diperlukan." });
+  // ── Partisipasi anggota ──
+  if (totalMembers > 0 && activeMembers < totalMembers) {
+    const inactiveCount = totalMembers - activeMembers;
+    insights.push({
+      type: "info",
+      title: `${inactiveCount} Anggota Belum Aktif`,
+      summary: `${inactiveCount} dari ${totalMembers} anggota belum pernah terlibat dalam tagihan manapun.`,
+      detail: "Anggota yang tidak aktif bisa menimbulkan ketidakseimbangan data. Ajak mereka untuk mulai mencatat atau ikut dalam transaksi berikutnya."
+    });
   }
 
-  if (conflicts?.length > 0) {
-    const highConflicts = conflicts.filter(c => c.severity === "high").length;
-    if (highConflicts > 0) {
-      insights.push({ type: "warning", title: `${highConflicts} Konflik Prioritas Tinggi`, summary: "Ada ketidakseimbangan signifikan dalam pembayaran grup.", detail: "Lihat tab Konflik untuk detail dan segera diskusikan dengan anggota." });
+  // ── Distribusi beban pembayaran ──
+  if (members.length >= 2) {
+    const maxOwed = Math.max(...members.map(m => m.owed ?? 0));
+    const minOwed = Math.min(...members.map(m => m.owed ?? 0));
+    const gap = maxOwed - minOwed;
+    if (gap > totalAmount * 0.4 && totalAmount > 0) {
+      const heaviest = members.find(m => m.owed === maxOwed);
+      insights.push({
+        type: "warning",
+        title: "Beban Tidak Merata",
+        summary: `${heaviest?.name ?? "Satu anggota"} menanggung beban terbesar — selisih dengan anggota lain cukup signifikan.`,
+        detail: `Selisih beban antar anggota mencapai ${Math.round((gap / totalAmount) * 100)}% dari total pengeluaran grup. Pertimbangkan untuk merotasi siapa yang membayar duluan di transaksi berikutnya.`
+      });
     }
   }
 
-  const totalMembers  = health?.total_members ?? 0;
-  const activeMembers = health?.active_members ?? 0;
-  if (totalMembers > 0 && activeMembers < totalMembers) {
-    insights.push({ type: "info", title: "Ada Anggota Tidak Aktif", summary: `${totalMembers - activeMembers} dari ${totalMembers} anggota belum aktif bertransaksi.`, detail: "Ajak semua anggota untuk ikut mencatat transaksi agar data lebih akurat." });
+  // ── Konflik ──
+  if (conflicts?.length > 0) {
+    const highConflicts = conflicts.filter(c => c.severity === "high").length;
+    const medConflicts  = conflicts.filter(c => c.severity === "medium").length;
+    if (highConflicts > 0) {
+      insights.push({
+        type: "warning",
+        title: `${highConflicts} Konflik Prioritas Tinggi`,
+        summary: `Terdeteksi ${highConflicts} potensi masalah yang perlu segera diperhatikan.`,
+        detail: "Konflik ini biasanya muncul dari tagihan duplikat atau ketidakseimbangan pembayaran yang terakumulasi. Lihat tab Konflik untuk detail lengkap."
+      });
+    } else if (medConflicts > 0) {
+      insights.push({
+        type: "info",
+        title: `${medConflicts} Potensi Konflik`,
+        summary: "Ada beberapa pola yang perlu diperhatikan dalam transaksi grup.",
+        detail: "Konflik medium biasanya tidak kritis, namun sebaiknya dikomunikasikan agar tidak berkembang menjadi masalah lebih besar."
+      });
+    }
+  }
+
+  // ── Tren pengeluaran ──
+  if (totalBills >= 5) {
+    insights.push({
+      type: "positive",
+      title: "Data Keuangan Cukup Lengkap",
+      summary: `Sudah ada ${totalBills} transaksi tercatat — analisis Talang.in semakin akurat.`,
+      detail: "Semakin banyak data yang masuk, semakin tepat rekomendasi yang bisa Talang.in berikan. Teruskan kebiasaan mencatat!"
+    });
+  }
+
+  // ── Tagihan lunas semua ──
+  if (totalSplits > 0 && unpaid === 0) {
+    insights.push({
+      type: "achievement",
+      title: "Semua Tagihan Lunas!",
+      summary: `Luar biasa — semua ${totalSplits} tagihan dalam grup ini sudah diselesaikan.`,
+      detail: "Ini adalah tanda grup yang sangat solid. Pertahankan kebiasaan melunasi hutang tepat waktu."
+    });
   }
 
   return insights;
 }
 
 function generateRecommendations(health, conflicts) {
-  const recs = [];
-  const score = health?.score ?? 0;
-  const activeDebts = health?.active_debts ?? 0;
+  const recs          = [];
+  const score         = health?.score ?? 0;
+  const unpaid        = health?.unpaid ?? 0;
+  const totalSplits   = health?.total_splits ?? 0;
+  const totalMembers  = health?.total_members ?? 0;
+  const activeMembers = health?.active_members ?? 0;
+  const totalBills    = health?.total_bills ?? 0;
+  const totalAmount   = health?.total_amount ?? 0;
+  const members       = health?.member_contributions ?? [];
+  const debtRatio     = health?.debt_ratio ?? 0;
 
-  if (activeDebts > 0) {
-    recs.push({ title: "Selesaikan Hutang dengan Simplify Debt", description: `Ada ${activeDebts} hutang aktif. Gunakan fitur Simplify Debt untuk meminimalkan jumlah transfer yang diperlukan antar anggota.`, impact: "high", action_label: "Buka Simplify Debt" });
+  // ── Prioritas tinggi: hutang menumpuk ──
+  if (unpaid > 0 && debtRatio > 0.5) {
+    recs.push({
+      title: "Segera Lunasi Hutang via Simplify Debt",
+      description: `${unpaid} dari ${totalSplits} tagihan belum terbayar (${Math.round(debtRatio * 100)}% total hutang). Gunakan Simplify Debt untuk mendapatkan rute pelunasan paling efisien — bayar lebih sedikit transfer, hutang selesai lebih cepat.`,
+      impact: "high",
+      action_label: "Buka Simplify Debt",
+      action_route: "/simplify"
+    });
+  } else if (unpaid > 0) {
+    recs.push({
+      title: "Selesaikan Tagihan yang Tertunggak",
+      description: `Ada ${unpaid} tagihan yang belum lunas. Tandai sebagai lunas setelah transfer dilakukan, agar saldo antar anggota selalu akurat.`,
+      impact: "high",
+      action_label: "Buka Simplify Debt",
+      action_route: "/simplify"
+    });
   }
 
+  // ── Konflik: ketidakseimbangan pembayaran ──
   if (conflicts?.some(c => c.severity === "high")) {
-    recs.push({ title: "Seimbangkan Giliran Pembayaran", description: "Terdeteksi ketidakseimbangan dalam siapa yang sering membayar duluan. Diskusikan agar semua anggota bergantian menalangi.", impact: "high", action_label: "Lihat detail konflik" });
+    recs.push({
+      title: "Atasi Konflik Pembayaran Segera",
+      description: "Terdeteksi pola ketidakseimbangan yang signifikan — kemungkinan ada tagihan duplikat atau anggota yang terlalu sering menanggung beban. Diskusikan bersama sebelum menambah transaksi baru.",
+      impact: "high",
+      action_label: "Lihat tab Konflik"
+    });
   }
 
+  // ── Anggota tidak aktif ──
+  if (totalMembers > 0 && activeMembers < totalMembers) {
+    const gap = totalMembers - activeMembers;
+    recs.push({
+      title: `Aktifkan ${gap} Anggota yang Belum Bertransaksi`,
+      description: `${gap} anggota belum terlibat dalam transaksi apapun. Ini bisa menyebabkan data keuangan grup tidak merepresentasikan kondisi sebenarnya. Ajak mereka ikut mencatat pengeluaran berikutnya.`,
+      impact: "medium"
+    });
+  }
+
+  // ── Distribusi beban tidak merata ──
+  if (members.length >= 2 && totalAmount > 0) {
+    const maxOwed  = Math.max(...members.map(m => m.owed ?? 0));
+    const minOwed  = Math.min(...members.map(m => m.owed ?? 0));
+    const heaviest = members.find(m => m.owed === maxOwed);
+    if ((maxOwed - minOwed) > totalAmount * 0.4) {
+      recs.push({
+        title: "Rotasi Giliran Pembayaran",
+        description: `${heaviest?.name ?? "Satu anggota"} menanggung porsi terbesar. Untuk menjaga keadilan, usahakan anggota yang berbeda-beda bergantian menjadi yang membayar duluan (payer) di setiap transaksi.`,
+        impact: "medium"
+      });
+    }
+  }
+
+  // ── Kebiasaan pencatatan ──
   if (score < 60) {
-    recs.push({ title: "Rutin Catat Semua Transaksi", description: "Pastikan setiap pengeluaran bersama langsung dicatat di Talang.in agar perhitungan selalu akurat dan transparan.", impact: "medium" });
+    recs.push({
+      title: "Biasakan Catat Transaksi Langsung",
+      description: "Semakin cepat transaksi dicatat setelah terjadi, semakin kecil kemungkinan ada yang terlupa. Targetkan mencatat di hari yang sama — ini satu kebiasaan kecil yang berdampak besar pada kesehatan finansial grup.",
+      impact: "medium"
+    });
   }
 
-  recs.push({ title: "Gunakan AI Input untuk Transaksi", description: 'Coba input transaksi dengan bahasa natural seperti "Geprek 75 ribu buat 3 orang, aku yang bayar" — lebih cepat dan mudah.', impact: "low", action_label: "Coba sekarang" });
+  // ── Potensi budget ──
+  if (totalBills >= 3 && totalAmount > 0) {
+    const avgPerBill = Math.round(totalAmount / totalBills);
+    recs.push({
+      title: "Pertimbangkan Budget Bersama",
+      description: `Rata-rata pengeluaran per transaksi grup adalah ${avgPerBill.toLocaleString("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 })}. Diskusikan batas pengeluaran bersama agar semua anggota bisa mengatur ekspektasi dengan lebih baik.`,
+      impact: "low"
+    });
+  }
+
+  // ── AI Input ── (selalu muncul sebagai opsional)
+  recs.push({
+    title: "Coba AI Smart Input",
+    description: "Input transaksi pakai bahasa natural seperti \"Geprek 75rb buat Budi, Sari, dan aku, aku yang bayar\" — Talang.in akan otomatis hitung pembagiannya. Lebih cepat dari input manual.",
+    impact: "low",
+    action_label: "Coba sekarang"
+  });
 
   return recs;
 }
@@ -253,6 +414,9 @@ function InsightCard({ insight }) {
 
 // ─── Rec card ─────────────────────────────────────────────────────────────────
 function RecCard({ rec, idx }) {
+
+  const navigate = useNavigate();
+
   const impactMap = {
     high:   { color: C.teal,    bg: `${C.teal}15`,    label: "Prioritas" },
     medium: { color: "#f59e0b", bg: "rgba(245,158,11,0.12)", label: "Sedang"    },
@@ -267,7 +431,9 @@ function RecCard({ rec, idx }) {
         {rec.title && <p className="text-sm font-bold text-gray-800 mb-1">{rec.title}</p>}
         <p className="text-sm text-gray-500 leading-relaxed">{rec.description}</p>
         {rec.action_label && (
-          <button className="mt-3 flex items-center gap-1.5 text-xs font-bold hover:underline transition-all"
+          <button 
+          onClick={() => rec.action_route && navigate(rec.action_route)}
+          className="mt-3 flex items-center gap-1.5 text-xs font-bold hover:underline transition-all"
             style={{ color: C.teal }}>
             {rec.action_label} <ArrowUpRight size={11} />
           </button>
@@ -410,7 +576,7 @@ export default function Analytics() {
       setLoading(p => ({ ...p, groups: true }));
       try {
         // Gunakan endpoint grup milik user, bukan semua grup
-        const res = await api.get(`/groups/user/${user.id}`);
+        const res = await api.get("/groups/my-groups");
         const raw = res.data?.data ?? res.data ?? [];
         // Response: [{ role, joined_at, groups: { id, group_name } }]
         const list = raw.map(item => ({
@@ -603,10 +769,16 @@ export default function Analytics() {
                   <span className="text-xs font-bold uppercase tracking-wide text-gray-400">Rincian Skor</span>
                 </div>
                 <div className="space-y-5">
-                  <BreakdownBar label="Kelancaran Pembayaran"    value={health?.payment_smoothness     ?? Math.round(score * 0.3)}  />
-                  <BreakdownBar label="Partisipasi Anggota"      value={health?.member_participation   ?? Math.round(score * 0.25)} />
-                  <BreakdownBar label="Keseimbangan Beban"       value={health?.balance_equity         ?? Math.round(score * 0.25)} />
-                  <BreakdownBar label="Konsistensi Transaksi"    value={health?.transaction_consistency ?? Math.round(score * 0.2)} />
+                  <BreakdownBar label="Kelancaran Pembayaran"
+                    value={health?.total_splits > 0 ? Math.round((health.paid / health.total_splits) * 100) : (score >= 80 ? 100 : 0)} />
+                  <BreakdownBar label="Partisipasi Anggota"
+                    value={health?.total_members > 0 ? Math.round((health.active_members / health.total_members) * 100) : 0} />
+                  <BreakdownBar label="Keseimbangan Beban"
+                    value={Math.round((1 - (health?.debt_ratio ?? 1)) * 100)} />
+                  <BreakdownBar label="Konsistensi Transaksi"
+                    value={health?.total_bills > 0 && health?.total_members > 0
+                      ? Math.min(100, Math.round((health.total_bills / Math.max(health.total_members, 1)) * 20))
+                      : 0} />
                 </div>
               </div>
             </div>

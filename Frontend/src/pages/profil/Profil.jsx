@@ -102,6 +102,8 @@ export default function Profil() {
 
   const [editForm, setEditForm]     = useState({ name: '', email: '', username: '', phone: '' })
   const [editErrors, setEditErrors] = useState({})
+  const [isEditing, setIsEditing]   = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
 
   const [pwForm, setPwForm]     = useState({ current_password: '', new_password: '', confirm_password: '' })
   const [pwErrors, setPwErrors] = useState({})
@@ -208,24 +210,37 @@ const handleUploadAvatar = async () => {
 
   const handleSaveProfile = async () => {
     const errs = {}
-    if (!editForm.name.trim())  errs.name  = 'Nama tidak boleh kosong'
+    if (!editForm.name.trim())     errs.name     = 'Nama tidak boleh kosong'
     if (!editForm.username.trim()) errs.username = 'Username tidak boleh kosong'
     if (Object.keys(errs).length) { setEditErrors(errs); return }
 
     try {
+      setSavingProfile(true)
       const res = await api.put(`/profiles/${user.id}`, {
         full_name: editForm.name.trim(),
         username:  editForm.username.trim(),
       })
-
       const updated = res.data?.data ?? res.data
-
       setProfile(prev => ({ ...prev, ...updated }))
       setEditErrors({})
+      setIsEditing(false)
       showToast('Profil berhasil diperbarui!')
     } catch (e) {
       showToast(e?.response?.data?.message || 'Gagal menyimpan profil', 'error')
+    } finally {
+      setSavingProfile(false)
     }
+  }
+
+  const handleCancelEdit = () => {
+    setIsEditing(false)
+    setEditErrors({})
+    setEditForm({
+      name:     profile?.full_name ?? profile?.name ?? '',
+      email:    profile?.email ?? '',
+      username: profile?.username ?? '',
+      phone:    profile?.phone ?? '',
+    })
   }
 
   const handleChangePassword = async () => {
@@ -354,13 +369,32 @@ const handleUploadAvatar = async () => {
               )}
             </div>
           </div>
-          <button
-            onClick={() => document.getElementById('name')?.focus()}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-blue-100 bg-blue-50
-              text-sm font-semibold text-blue-600 hover:bg-blue-100 transition shrink-0"
-          >
-            <User size={14} /> Edit Profil
-          </button>
+          {isEditing ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleSaveProfile}
+                disabled={savingProfile}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: '#232F72' }}
+              >
+                <Save size={14} /> {savingProfile ? 'Menyimpan...' : 'Simpan'}
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-500 hover:bg-gray-50 transition"
+              >
+                Batalkan
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#232F72] bg-[#232F72]/5
+                text-sm font-semibold text-[#232F72] hover:bg-[#232F72]/10 transition shrink-0"
+            >
+              <User size={14} /> Edit Profil
+            </button>
+          )}
         </div>
 
         {/* ── 2 col layout ── */}
@@ -375,10 +409,12 @@ const handleUploadAvatar = async () => {
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Nama Lengkap" id="name" icon={User}
                   value={editForm.name} placeholder="Nama lengkap kamu"
+                  disabled={!isEditing}
                   onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}
                   error={editErrors.name} />
                 <Input label="Username" id="username" icon={AtSign}
                   value={editForm.username} placeholder="username kamu"
+                  disabled={!isEditing}
                   onChange={e => setEditForm(p => ({ ...p, username: e.target.value }))} />
                 <Input label="Email" id="email" type="email" icon={Mail}
                   value={editForm.email} placeholder="email@contoh.com"
@@ -387,11 +423,12 @@ const handleUploadAvatar = async () => {
                   error={editErrors.email} />
                 <Input label="Nomor Telepon" id="phone" icon={Phone}
                   value={editForm.phone} placeholder="08xxxxxxxxxx"
+                  disabled={!isEditing}
                   onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} />
               </div>
 
-              {/* Upload foto */}
-              <div>
+              {/* Upload foto — hanya tampil saat mode edit */}
+              {isEditing && (<div>
                 <label className="text-xs font-medium text-gray-500 block mb-1.5">
                   Foto Profil
                 </label>
@@ -452,19 +489,9 @@ const handleUploadAvatar = async () => {
                     {uploadingAvatar ? 'Mengupload...' : 'Upload Foto'}
                   </button>
                 )}
-              </div>
+              </div>)}
 
-              <div className="flex items-center gap-3 pt-1">
-                <button onClick={handleSaveProfile}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition hover:opacity-90"
-                  style={{ backgroundColor: C.navy }}>
-                  <Save size={14} /> Simpan Perubahan
-                </button>
-                <button onClick={() => setEditForm({ name: profile?.full_name ?? profile?.name ?? '', email: profile?.email ?? '', username: profile?.username ?? '', phone: profile?.phone ?? '' })}
-                  className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-500 hover:text-gray-700 transition">
-                  Batalkan
-                </button>
-              </div>
+
             </div>
 
             {/* Ubah Password */}

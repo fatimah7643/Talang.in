@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Bell, CheckCheck, RefreshCw, XCircle,
-  Receipt, Users, Wallet, Activity, Info, Search,
+  Receipt, Users, Wallet, Activity, Info, Search, Trash2,
 } from 'lucide-react'
 import api from '../../services/api'
 
@@ -35,7 +35,7 @@ const Sk = ({ className = '' }) => (
   <div className={`animate-pulse rounded-xl bg-gray-100 ${className}`} />
 )
 
-function NotifItem({ notif, onRead }) {
+function NotifItem({ notif, onRead, onDelete }) {
   const cfg  = typeConfig[notif.type] ?? typeConfig.default
   const Icon = cfg.icon
   return (
@@ -45,10 +45,13 @@ function NotifItem({ notif, onRead }) {
         ${!notif.is_read ? 'bg-blue-50/40' : 'bg-white'}`}
       style={{ borderLeft: `3px solid ${!notif.is_read ? C.teal : 'transparent'}` }}
     >
+      {/* Icon */}
       <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
         style={{ backgroundColor: cfg.bg }}>
         <Icon size={17} style={{ color: cfg.color }} />
       </div>
+
+      {/* Konten */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-3">
           <p className={`text-sm leading-snug ${!notif.is_read ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
@@ -65,17 +68,28 @@ function NotifItem({ notif, onRead }) {
           {notif.created_at ? timeAgo(notif.created_at) : ''}
         </p>
       </div>
+
+      {/* Tombol hapus per item */}
+      <button
+        onClick={e => { e.stopPropagation(); onDelete(notif.id) }}
+        className="shrink-0 mt-0.5 p-1 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
+      >
+        <Trash2 size={14} />
+      </button>
     </div>
   )
 }
 
 export default function Notifikasi() {
-  const [notifs, setNotifs]         = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [error, setError]           = useState(null)
-  const [markingAll, setMarkingAll] = useState(false)
-  const [activeTab, setActiveTab]   = useState('semua')
-  const [search, setSearch]         = useState('')
+  const [notifs, setNotifs]           = useState([])
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
+  const [markingAll, setMarkingAll]   = useState(false)
+  const [activeTab, setActiveTab]     = useState('semua')
+  const [search, setSearch]           = useState('')
+  // eslint-disable-next-line no-unused-vars
+  const [deletingId, setDeletingId]   = useState(null)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   const unread = notifs.filter(n => !n.is_read)
 
@@ -94,13 +108,12 @@ export default function Notifikasi() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchNotifs() }, [])
 
-
   const handleRead = async (id) => {
     setNotifs(p => p.map(n => n.id === id ? { ...n, is_read: true } : n))
     try {
       await api.put(`/notifications/${id}/read`)
     } catch {
-        // Kalau gagal, rollback ke unread lagi
+      // rollback kalau gagal
     }
   }
 
@@ -110,18 +123,43 @@ export default function Notifikasi() {
     try {
       await api.put('/notifications/read-all')
     } catch {
-      // Kalau gagal, rollback ke semula
+      // rollback kalau gagal
     } finally {
       setMarkingAll(false)
     }
   }
 
+  const handleDelete = async (id) => {
+    setDeletingId(id)
+    setNotifs(p => p.filter(n => n.id !== id))
+    try {
+      await api.delete(`/notifications/${id}`)
+    } catch {
+      fetchNotifs() // rollback kalau gagal
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  const handleDeleteAll = async () => {
+    if (!window.confirm('Hapus semua notifikasi?')) return
+    setDeletingAll(true)
+    setNotifs([])
+    try {
+      await api.delete('/notifications/delete-all')
+    } catch {
+      fetchNotifs() // rollback kalau gagal
+    } finally {
+      setDeletingAll(false)
+    }
+  }
+
   const tabs = [
-    { id: 'semua',      label: 'Semua'       },
-    { id: 'transaksi',  label: 'Transaksi'   },
-    { id: 'pembayaran', label: 'Pembayaran'  },
-    { id: 'insight',    label: 'Insight'     },
-    { id: 'pengingat',  label: 'Pengingat'   },
+    { id: 'semua',      label: 'Semua'      },
+    { id: 'transaksi',  label: 'Transaksi'  },
+    { id: 'pembayaran', label: 'Pembayaran' },
+    { id: 'insight',    label: 'Insight'    },
+    { id: 'pengingat',  label: 'Pengingat'  },
   ]
 
   const typeMap = {
@@ -142,7 +180,7 @@ export default function Notifikasi() {
       <div className="bg-white border-b border-gray-100 px-6 py-4">
         <div className="flex items-center justify-between mb-4">
 
-          {/* Judul + icon — sama persis seperti halaman lain */}
+          {/* Judul + icon */}
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl"
               style={{ backgroundColor: `${C.teal}18` }}>
@@ -154,8 +192,9 @@ export default function Notifikasi() {
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions — semua tombol dalam satu baris */}
           <div className="flex items-center gap-3">
+
             {/* Search */}
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-400">
               <Search size={14} />
@@ -168,7 +207,7 @@ export default function Notifikasi() {
               />
             </div>
 
-            {/* Mark all */}
+            {/* Tandai semua dibaca */}
             <button
               onClick={handleMarkAll}
               disabled={markingAll || unread.length === 0}
@@ -178,8 +217,22 @@ export default function Notifikasi() {
               {markingAll
                 ? <RefreshCw size={14} className="animate-spin" />
                 : <CheckCheck size={14} />}
-              Tandai semua sudah dibaca
+              Tandai semua dibaca
             </button>
+
+            {/* Hapus semua */}
+            <button
+              onClick={handleDeleteAll}
+              disabled={deletingAll || notifs.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition hover:bg-red-50 disabled:opacity-40"
+              style={{ borderColor: '#ef4444', color: '#ef4444' }}
+            >
+              {deletingAll
+                ? <RefreshCw size={14} className="animate-spin" />
+                : <Trash2 size={14} />}
+              Hapus semua
+            </button>
+
           </div>
         </div>
 
@@ -256,7 +309,7 @@ export default function Notifikasi() {
         {!loading && !error && displayed.length > 0 && (
           <div className="max-w-2xl rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden divide-y divide-gray-100">
             {displayed.map(n => (
-              <NotifItem key={n.id} notif={n} onRead={handleRead} />
+              <NotifItem key={n.id} notif={n} onRead={handleRead} onDelete={handleDelete} />
             ))}
           </div>
         )}

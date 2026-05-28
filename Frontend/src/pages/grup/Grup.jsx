@@ -58,6 +58,7 @@ function ModalWrapper({ children, onClose, title, subtitle }) {
 
 /* ─────────────────────── MODAL BUAT GRUP ───────────────────── */
 // FIX #3: Terima user_id sebagai prop, fix endpoint + payload
+// eslint-disable-next-line no-unused-vars
 function ModalBuatGrup({ onClose, onCreated, userId }) {
   const [form, setForm]       = useState({ name: '', description: '' })
   const [error, setError]     = useState('')
@@ -68,10 +69,9 @@ function ModalBuatGrup({ onClose, onCreated, userId }) {
     if (!form.name.trim()) { setError('Nama grup wajib diisi.'); return }
     setLoading(true); setError('')
     try {
-      // FIX: endpoint /groups/create + payload group_name + user_id
+      // user_id diambil dari JWT di backend, tidak perlu dikirim
       const res = await api.post('/groups/create', {
         group_name: form.name,
-        user_id: userId,
       })
       const newGrup = res.data?.data || res.data
       // Normalize field: backend return group_name, frontend pakai name
@@ -567,7 +567,7 @@ export default function GrupPage() {
     setLoading(true); setError('')
     try {
       // FIX #1: Gunakan endpoint /groups/user/:user_id — bukan /groups
-      const res  = await api.get(`/groups/user/${user.id}`)
+      const res  = await api.get("/groups/my-groups")
       const raw  = res.data?.data || []
 
       // FIX #2: Normalize response shape — backend return { role, joined_at, groups: { id, group_name, ... } }

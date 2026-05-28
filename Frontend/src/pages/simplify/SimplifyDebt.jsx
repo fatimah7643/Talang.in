@@ -201,7 +201,7 @@ export default function SimplifyDebt() {
 
   useEffect(() => {
   if (!user?.id) return
-  api.get(`/groups/user/${user.id}`)
+  api.get("/groups/my-groups")
     .then(r => {
       const raw = r.data?.data || r.data || []
       const mapped = raw.map(item => ({

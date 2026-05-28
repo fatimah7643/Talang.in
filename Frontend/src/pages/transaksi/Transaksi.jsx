@@ -4,7 +4,7 @@ import {
   ArrowLeftRight, Plus, Search, Filter, X, ChevronDown, AlertCircle,
   Loader2, RefreshCw, Receipt, Calendar, User, Users,
   SplitSquareHorizontal, CheckCircle2, Clock, ChevronLeft, ChevronRight,
-  Wallet, BarChart2, Sparkles,
+  Wallet, BarChart2, Sparkles, Trash2,
 } from 'lucide-react'
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
@@ -289,31 +289,41 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
       const grup = grups.find(g => String(g.id) === String(form.group_id))
       const addedTrxs = []
 
+      const payerIds = new Set(payers.map(p => p.member_id))
+      const nonPayers = activeMembers.filter(m => !payerIds.has(m.id))
+      const totalNonPayerShare = nonPayers.reduce((s, m) => s + (memberShareMap[m.id] || 0), 0)
+
       for (const payer of payers) {
-        const payerAmount = parseFloat(payer.amount)
-        // Member yang berhutang ke payer ini = semua active member kecuali payer sendiri
-        const debtors = activeMembers.filter(m => m.id !== payer.member_id)
+        const paidAmount = parseFloat(payer.amount)
+        const ownShare   = memberShareMap[payer.member_id] || 0
+        const lentAmount = paidAmount - ownShare  // selisih yang dia talangin untuk orang lain
 
-        if (debtors.length === 0) continue
+        // Kalau dia cuma bayar bagiannya sendiri, skip — tidak ada hutang ke dia
+        if (lentAmount <= 0.5) continue
 
-        // Hitung proporsi hutang ke payer ini
-        // Berdasarkan share tiap member dibanding total share non-payer
-        let splitsPayload = []
+        // Bagi lentAmount ke non-payer secara proporsional berdasarkan share masing-masing
+        const splitsPayload = nonPayers
+          .map(m => {
+            const ratio       = totalNonPayerShare > 0
+              ? (memberShareMap[m.id] || 0) / totalNonPayerShare
+              : 1 / nonPayers.length
+            return {
+              member_id:    m.id,
+              share_amount: Math.round(ratio * lentAmount),
+            }
+          })
+          .filter(s => s.share_amount > 0)
 
-        // memberShareMap langsung
-        splitsPayload = debtors.map(m => ({
-          member_id:    m.id,
-          share_amount: memberShareMap[m.id] || 0,
-        })).filter(s => s.share_amount > 0)
+        if (splitsPayload.length === 0) continue
 
         const payload = {
-          group_id:    form.group_id,
-          payer_id:    payer.member_id,
-          amount:      totalAmount,
-          description: form.title,
-          category:    form.category,
-          split_method: form.split_method,
-          splits:      splitsPayload,
+          group_id:     form.group_id,
+          payer_id:     payer.member_id,
+          amount:       lentAmount,
+          description:  form.title,
+          category:     form.category,
+          split_method: 'custom',
+          splits:       splitsPayload,
         }
 
         const res  = await api.post('/bills/split', payload)
@@ -321,11 +331,11 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
         addedTrxs.push({
           id:           bill.id,
           title:        bill.description || form.title,
-          amount:       bill.amount      || totalAmount,
+          amount:       bill.amount      || lentAmount,
           category:     bill.category    || form.category,
           date:         bill.created_at  || form.date,
           status:       'pending',
-          split_method: form.split_method,
+          split_method: 'custom',
           group_name:   grup?.name || '—',
           paid_by_name: payer.name,
           splits:       (res.data?.split_details || []).map(s => ({
@@ -334,6 +344,11 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
             status: 'pending',
           })),
         })
+      }
+
+      if (addedTrxs.length === 0) {
+        toast.success('Tersimpan!', 'Semua payer hanya bayar bagiannya sendiri, tidak ada hutang.')
+        onClose(); return
       }
 
       addedTrxs.forEach(t => onAdded(t))
@@ -702,9 +717,33 @@ function ModalNLP({ grups, onClose, onAdded }) {
   }
 }, [text, members])
 
+  // Deteksi multi-payer dari teks sebelum kirim ke backend
+  const detectMultiPayer = (text, members) => {
+    const payerKeywords = /(?:dibayar(?:in)?|bayarin|yang\s+bayar|yang\s+keluar\s+duit)\s+(.+?)(?:\.|,|$)/i
+    const match = payerKeywords.exec(text)
+    if (!match) return []
+
+    const payerPhrase = match[1].toLowerCase()
+    // Cek berapa member yang namanya muncul di frasa payer
+    const foundPayers = members.filter(m => {
+      const firstName = m.name.split(' ')[0].toLowerCase()
+      return payerPhrase.includes(firstName)
+    })
+    return foundPayers
+  }
+
   const handleSubmit = async () => {
     if (!text.trim()) { setError('Tulis deskripsi transaksi dulu.'); return }
     if (!selected.length) { setError('Pilih minimal 1 anggota.'); return }
+
+    // Validasi multi-payer sebelum kirim ke AI
+    const selectedMemberObjs = members.filter(m => selected.includes(m.id))
+    const detectedPayers = detectMultiPayer(text, selectedMemberObjs)
+    if (detectedPayers.length > 1) {
+      setError(`Terdeteksi ${detectedPayers.length} pembayar (${detectedPayers.map(m => m.name.split(' ')[0]).join(', ')}). AI Input hanya support 1 pembayar — gunakan tombol "Tambah" untuk transaksi dengan lebih dari 1 pembayar.`)
+      return
+    }
+
     setLoading(true); setError('')
     try {
       const group_members = members
@@ -723,6 +762,13 @@ function ModalNLP({ grups, onClose, onAdded }) {
       const billId = bill.id || res.data?.id || res.data?.bill_id
       const parsed  = res.data?.ai_parsed    || {}
       const grup    = grups.find(g => String(g.id) === String(grupId))
+
+      // paidBy bisa berupa string atau array dari backend — normalize ke string
+      const rawPaidBy = parsed.paidBy ?? ''
+      const paidByStr = Array.isArray(rawPaidBy)
+        ? rawPaidBy.join(', ')
+        : String(rawPaidBy)
+
       const normalizedTrx = {
         id:           billId,
         title:        bill.description || parsed.title || 'Transaksi AI',
@@ -730,9 +776,9 @@ function ModalNLP({ grups, onClose, onAdded }) {
         category:     bill.category    || parsed.category || 'Lainnya',
         date:         bill.created_at,
         status:       'pending',
-        split_method: parsed.splitMethod || 'equal',
+        split_method: bill.split_method || parsed.splitMethod || 'equal',
         group_name:   grup?.name || 'Tidak diketahui',
-        paid_by_name: parsed.paidBy || '—',
+        paid_by_name: paidByStr || '—',
         splits:       [],
       }
       onAdded(normalizedTrx)
@@ -843,9 +889,26 @@ function ModalNLP({ grups, onClose, onAdded }) {
 }
 
 /* ─────────────────────── MODAL DETAIL ──────────────────────────── */
-function ModalDetail({ trx, onClose, grups = [] }) {
-  const [splits, setSplits]   = useState([])
+function ModalDetail({ trx, onClose, grups = [], onDeleted }) {
+  const [splits, setSplits]             = useState([])
   const [loadingSplits, setLoadingSplits] = useState(true)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting]           = useState(false)
+  const toast = useToast()
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await api.delete(`/bills/${trx.id}`)
+      toast.success('Transaksi dihapus', `"${trx.title || trx.description}" berhasil dihapus.`)
+      onDeleted(trx.id)
+      onClose()
+    } catch (e) {
+      toast.error('Gagal menghapus', e.response?.data?.message || 'Terjadi kesalahan.')
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
 
   useEffect(() => {
   if (!trx?.id) return
@@ -943,12 +1006,35 @@ function ModalDetail({ trx, onClose, grups = [] }) {
           </div>
         </div>
 
-        <div className="border-t border-gray-100 px-6 py-4">
-          <button onClick={onClose}
-            className="w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold
-              text-gray-600 hover:bg-gray-50 transition-all active:scale-[0.99]">
-            Tutup
-          </button>
+        <div className="border-t border-gray-100 px-6 py-4 space-y-2">
+          {confirmDelete ? (
+            <div className="rounded-xl bg-red-50 border border-red-100 p-4">
+              <p className="text-sm font-semibold text-red-700 mb-1">Hapus transaksi ini?</p>
+              <p className="text-xs text-red-500 mb-3">Semua data split terkait juga akan dihapus dan tidak bisa dikembalikan.</p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmDelete(false)}
+                  className="flex-1 rounded-xl border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all">
+                  Batal
+                </button>
+                <button onClick={handleDelete} disabled={deleting}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 py-2 text-sm font-semibold text-white hover:bg-red-600 transition-all disabled:opacity-60">
+                  {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-all">
+                <Trash2 size={14} /> Hapus
+              </button>
+              <button onClick={onClose}
+                className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all active:scale-[0.99]">
+                Tutup
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1110,7 +1196,7 @@ function SummaryCard({ icon: Icon, label, value, accent, sub }) {
 const PAGE_SIZE = 10
 
 export default function TransaksiPage() {
-  const { user }                      = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [trxs, setTrxs]               = useState([])
   const [grups, setGrups]             = useState([])
   const [loading, setLoading]         = useState(true)
@@ -1156,9 +1242,9 @@ export default function TransaksiPage() {
   }, []) // eslint-disable-line
 
   const fetchGrups = useCallback(async () => {
-    if (!user?.id) return
+    if (!user?.id) return   // user sudah pasti ada karena dipanggil setelah authLoading selesai
     try {
-      const res = await api.get(`/groups/user/${user.id}`)
+      const res = await api.get("/groups/my-groups")
       const raw = res.data?.data || res.data || []
       const mapped = raw.map(item => ({
         id:   item.groups?.id   || item.id,
@@ -1168,14 +1254,17 @@ export default function TransaksiPage() {
     } catch { /* empty */ }
   }, [user])
 
-  useEffect(() => { 
+  useEffect(() => {
+    // Tunggu AuthContext selesai verifikasi token sebelum fetch grup
+    // Sebelumnya user masih null saat komponen pertama render → fetchGrups langsung return
+    if (authLoading) return
     let active = true
     const init = async () => {
       await fetchGrups()
     }
     init()
     return () => { active = false }
-  }, [fetchGrups])
+  }, [fetchGrups, authLoading])
 
   useEffect(() => {
     if (grups.length > 0 && !filters.group_id) {
@@ -1201,6 +1290,23 @@ export default function TransaksiPage() {
   const handleAdded = (newTrx) => {
     setTrxs(p => [newTrx, ...p])
     setSummary(p => ({ ...p, count: p.count + 1, total: p.total + (newTrx.amount || 0) }))
+  }
+
+  const handleDeleted = (deletedId) => {
+    setTrxs(p => {
+      const deleted = p.find(t => t.id === deletedId)
+      const next = p.filter(t => t.id !== deletedId)
+      if (deleted) {
+        setSummary(s => ({
+          ...s,
+          count:   Math.max(0, s.count - 1),
+          total:   Math.max(0, s.total - (deleted.amount || 0)),
+          lunas:   deleted.status === 'lunas'    ? Math.max(0, s.lunas - 1)   : s.lunas,
+          pending: deleted.status === 'pending'  ? Math.max(0, s.pending - 1) : s.pending,
+        }))
+      }
+      return next
+    })
   }
 
   return (
@@ -1425,7 +1531,7 @@ export default function TransaksiPage() {
       {/* ── MODALS ── */}
       {modalNlp    && <ModalNLP    grups={grups} onClose={() => setModalNlp(false)}    onAdded={handleAdded} />}
       {modalTambah && <ModalTambah grups={grups} onClose={() => setModalTambah(false)} onAdded={handleAdded} currentUser={user} />}
-      {modalDetail && <ModalDetail trx={modalDetail} onClose={() => setModalDetail(null)} grups={grups} />}
+      {modalDetail && <ModalDetail trx={modalDetail} onClose={() => setModalDetail(null)} grups={grups} onDeleted={handleDeleted} />}
     </div>
   )
 }
