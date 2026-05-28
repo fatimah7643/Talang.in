@@ -491,23 +491,30 @@ export const splitBillNLP = async (req, res) => {
       finalSplitMethod = 'equal'
       const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal
       
-      // Ambil daftar user yang ditulis eksplisit di teks jika ada
+      // 1. Ambil daftar user yang ditulis eksplisit di teks jika ada (atau default seluruh grup)
       const explicitParticipants = extractExplicitParticipants(raw_text, group_members);
       const targetGroup = explicitParticipants || group_members;
 
-      // Filter yang bukan pembayar
-      const debtors    = targetGroup.filter(m => !isPayerMatch(m.name, payerNorm))
-      const equalShare = Math.floor(fallbackAmount / (debtors.length || 1))
-      const rem        = fallbackAmount - equalShare * debtors.length
+      // 2. Pembagi harus TOTAL SEMUA ORANG YANG IKUT MAKAN (termasuk payer)
+      const totalEatingCount = targetGroup.length || 1;
+      const equalShare = Math.floor(fallbackAmount / totalEatingCount);
+      
+      // 3. Filter hanya debtors untuk dimasukkan ke database split
+      const debtors = targetGroup.filter(m => !isPayerMatch(m.name, payerNorm));
+      
+      // Sisa pembulatan (jika ada) dibebankan ke salah satu debtor
+      const assignedTotalForDebtors = equalShare * debtors.length;
+      const remainder = fallbackAmount - (equalShare * totalEatingCount); 
       
       finalParticipants = debtors.map((m, idx) => {
         const targetId = m.profile_id || m.id;
         return {
           id: targetId, 
           name: m.name,
-          amount: idx === 0 ? equalShare + rem : equalShare
+          // Jika ada sisa pembulatan dari Math.floor, masukkan ke orang pertama
+          amount: idx === 0 ? equalShare + remainder : equalShare
         }
-      })
+      });
     }
 
     // ── STEP 3: Simpan ke Database ──────────────────────────────
