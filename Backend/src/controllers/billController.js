@@ -135,11 +135,18 @@ const extractExplicitTotal = (text) => {
 
 const extractShortTitle = (text) => {
   const firstLine = text.trim().split('\n')[0];
-  const words = firstLine.split(/\s+/);
-  const stopWords = /^(\d|dibayar|dibayarin|bayarin|bayar|total|oleh|sama|dan|yg|yang|udah|sudah|udh|tadi|kemarin|buat|semuanya)$/i;
+  // Hapus pola payer di awal: "Michael bayarin", "Risna bayar semuanya", dll
+  const withoutPayer = firstLine
+    .replace(/^[A-Za-z]+\s+(?:bayarin|bayar(?:in)?|membayar|dibayar(?:in)?)\s*/i, '')
+    .trim();
+  const source = withoutPayer || firstLine;
+
+  const words = source.split(/\s+/);
+  const stopWords = /^(\d|dibayar|dibayarin|bayarin|bayar|total|oleh|sama|dan|yg|yang|udah|sudah|udh|tadi|kemarin|buat|semuanya|berlima|berempat|bertiga|berdua|berenam)$/i;
   const result = [];
   for (const word of words) {
     if (stopWords.test(word)) break;
+    if (/^\d/.test(word)) break; // stop kalau mulai dengan angka (nominal)
     if (word.endsWith(',')) {
       result.push(word.replace(/,+$/, ''));
       break;
@@ -147,7 +154,7 @@ const extractShortTitle = (text) => {
     result.push(word.replace(/[.:!?]+$/, ''));
     if (result.length >= 5) break;
   }
-  return result.join(' ') || firstLine.split(/[,.]/, 1)[0].trim().substring(0, 40);
+  return result.join(' ') || source.split(/[,.]/, 1)[0].trim().substring(0, 40);
 };
 
 const isPayerMatch = (memberName, payerNorm) => {
@@ -452,6 +459,20 @@ export const splitBillNLP = async (req, res) => {
         if (mapped.length > 0) {
           finalSplitMethod  = 'itemized';
           finalParticipants = mapped;
+        } else {
+          // AI return nama yang tidak dikenali (misal "berlima", "semua", dll)
+          // → fallback ke equal split pakai semua group_members yang dikirim frontend
+          finalSplitMethod = 'equal';
+          const fallbackAmount = correctedAmount > 0 ? correctedAmount : maxTextNominal;
+          const debtors = group_members.filter(m => !isPayerMatch(m.name, payerNorm));
+          const totalCount = group_members.length || 1;
+          const share = Math.floor(fallbackAmount / totalCount);
+          const rem   = fallbackAmount - share * totalCount;
+          finalParticipants = debtors.map((m, idx) => ({
+            id:     m.profile_id || m.id,
+            name:   m.name,
+            amount: idx === 0 ? share + rem : share
+          }));
         }
       }
 
