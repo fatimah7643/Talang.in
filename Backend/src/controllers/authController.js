@@ -101,8 +101,8 @@ export const googleLogin = async (req, res) => {
       provider: 'google',
       options: {
         // Arahkan Google balik ke endpoint callback di Railway ini
-        redirectTo: 'https://talangin-production.up.railway.app/api/v1/auth/google/callback',
-      },
+        redirectTo: `${process.env.BACKEND_URL}/api/v1/auth/google/callback`,
+      }
     });
 
     if (error) throw error;
@@ -120,7 +120,7 @@ export const googleCallback = async (req, res) => {
 
   // Jika code tidak dikirim oleh Google, balikkan ke frontend dengan pesan error
   if (!code) {
-    return res.redirect('http://localhost:5173/login?error=no_code_from_google');
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=no_code_from_google`);
   }
 
   try {
@@ -163,9 +163,9 @@ export const googleCallback = async (req, res) => {
     }));
     
     // Alihkan user ke frontend localhost sambil membawa token & data user di URL query
-    return res.redirect(`http://localhost:5173/dashboard?token=${session.access_token}&user=${userData}`);
+    return res.redirect(`${process.env.FRONTEND_URL}/dashboard?token=${session.access_token}&user=${userData}`);
   } catch (error) {
     console.error("OAuth Callback Error:", error.message);
-    return res.redirect('http://localhost:5173/login?error=oauth_failed');
+    return res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
   }
 };
