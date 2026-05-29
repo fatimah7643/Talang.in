@@ -508,8 +508,7 @@ export default function BalancePage() {
   const [modalSettle, setModalSettle]   = useState(null)
   const [tab, setTab]                   = useState('debts')
   // akumulasi total yang sudah lunas dan jumlah transaksi yang sudah lunas, untuk ditampilkan di summary card
-  const [settledAmount, setSettledAmount] = useState(0)
-  const [settledCount, setSettledCount]   = useState(0)
+  const [settledSummary, setSettledSummary] = useState({ settled_amount: 0, settled_count: 0 })
 
 
   const meId = user?.id
@@ -576,6 +575,13 @@ export default function BalancePage() {
       }))
       setBalances(memberBalances)
 
+      try {
+        const settledRes = await api.get(`/settlements/${gid}/settled-summary`)
+        setSettledSummary(settledRes.data?.data || { settled_amount: 0, settled_count: 0 })
+      } catch  {
+        // intentionally ignored
+      }
+
     } catch (e) {
       setError(e.response?.data?.message || 'Gagal memuat data balance.')
     } finally {
@@ -593,8 +599,6 @@ export default function BalancePage() {
     setDebts(p => p.filter(d =>
       !(d.from_user_id === debt.from_user_id && d.to_user_id === debt.to_user_id)
     ))
-    setSettledAmount(prev => prev + (debt.amount || 0))
-    setSettledCount(prev => prev + 1)
     setTimeout(() => fetchBalance(selectedGrup), 500)
   }
 
@@ -709,8 +713,8 @@ export default function BalancePage() {
               />
               <SummaryCard
                 label="Sudah Lunas"
-                value={rupiah(settledAmount)}
-                sub={`${settledCount} transaksi selesai`}
+                value={rupiah(settledSummary.settled_amount)}
+                sub={`${settledSummary.settled_count} transaksi selesai`}
                 dotColor="bg-gray-300"
                 valueColor="text-gray-500"
                 subColor="text-gray-400"

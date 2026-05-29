@@ -598,7 +598,6 @@ export default function Analytics() {
     if (!selectedGroup) return;
     setLoading(p => ({ ...p, analytics: true }));
     setError(p => ({ ...p, analytics: null }));
-    setData(null);
     try {
       const groupId = selectedGroup.id;
       const [healthRes, conflictRes, dashRes] = await Promise.allSettled([
