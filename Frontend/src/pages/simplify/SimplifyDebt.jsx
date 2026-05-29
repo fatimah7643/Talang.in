@@ -65,17 +65,15 @@ function GrupSelector({ grups, selected, onChange }) {
 // ─── Stat card ────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, icon: Icon, color, accent }) {
   return (
-    <div className="rounded-2xl bg-white border border-gray-100 p-5 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-bold uppercase tracking-wide text-gray-400">{label}</p>
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl"
-          style={{ backgroundColor: `${color}15` }}>
-          <Icon size={15} style={{ color }} />
-        </div>
+    <div className="rounded-2xl bg-white border border-gray-100 px-4 py-3 sm:p-5 shadow-sm flex flex-row sm:flex-col items-center sm:items-start gap-3 sm:gap-3 hover:shadow-md transition-shadow">
+      <div className="flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-xl shrink-0"
+        style={{ backgroundColor: `${color}15` }}>
+        <Icon size={18} style={{ color }} />
       </div>
-      <div>
-        <p className="text-2xl font-black tracking-tight" style={{ color: accent ?? C.navyDark }}>{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-400 leading-tight">{label}</p>
+        <p className="text-lg sm:text-2xl font-black tracking-tight break-all mt-0.5" style={{ color: accent ?? C.navyDark }}>{value}</p>
+        {sub && <p className="text-xs text-gray-400">{sub}</p>}
       </div>
     </div>
   )
@@ -84,61 +82,113 @@ function StatCard({ label, value, sub, icon: Icon, color, accent }) {
 // ─── Transfer row ─────────────────────────────────────────────────────────────
 function TransferRow({ tx, idx }) {
   const [done, setDone] = useState(false)
+  const [open, setOpen] = useState(false)
 
   return (
-    <div className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
-      done
-        ? 'bg-gray-50 border-gray-100 opacity-60'
-        : 'bg-white border-gray-100 hover:shadow-md hover:border-gray-200'
+    <div className={`rounded-2xl border transition-all ${
+      done ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 hover:shadow-md hover:border-gray-200'
     }`}>
-      {/* Nomor urut */}
-      <div className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0"
-        style={{ background: done ? '#9ca3af' : `linear-gradient(135deg, ${C.navy}, ${C.teal})` }}>
-        {idx + 1}
+      {/* Header — selalu tampil, klik untuk expand */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-4 p-3 sm:p-4 cursor-pointer"
+        onClick={() => setOpen(p => !p)}>
+
+        {/* Row atas: nomor + avatar from + panah + amount + avatar to + chevron */}
+        <div className="flex items-center gap-2 w-full">
+          {/* Nomor urut */}
+          <div className="w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black text-white shrink-0"
+            style={{ background: done ? '#9ca3af' : `linear-gradient(135deg, ${C.navy}, ${C.teal})` }}>
+            {idx + 1}
+          </div>
+
+          {/* Avatar From */}
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
+            style={{ backgroundColor: done ? '#9ca3af' : '#ef4444' }}>
+            {tx.from_name?.[0]?.toUpperCase() || '?'}
+          </div>
+
+          {/* Nama from — hidden di mobile */}
+          <span className="hidden sm:block text-sm font-bold max-w-[60px] truncate" style={{ color: C.navyDark }}>
+            {tx.from_name || '—'}
+          </span>
+
+          {/* Arrow + amount */}
+          <div className="flex-1 flex flex-col items-center gap-1">
+            <p className="text-sm font-black" style={{ color: done ? '#9ca3af' : C.navyDark }}>{rupiah(tx.amount)}</p>
+            <div className="flex items-center gap-1 w-full">
+              <div className="flex-1 h-0.5 rounded-full" style={{ backgroundColor: done ? '#e5e7eb' : `${C.teal}40` }} />
+              <ArrowRight size={13} style={{ color: done ? '#9ca3af' : C.teal }} />
+            </div>
+          </div>
+
+          {/* Nama to — hidden di mobile */}
+          <span className="hidden sm:block text-sm font-bold max-w-[60px] truncate" style={{ color: C.navyDark }}>
+            {tx.to_name || '—'}
+          </span>
+
+          {/* Avatar To */}
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
+            style={{ backgroundColor: done ? '#9ca3af' : C.teal }}>
+            {tx.to_name?.[0]?.toUpperCase() || '?'}
+          </div>
+
+          {/* Chevron */}
+          <ChevronDown size={14} className={`text-gray-400 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+        </div>
+
+        {/* Row bawah: nama from & to — HANYA muncul di mobile */}
+        <div className="flex sm:hidden items-center justify-between mt-1.5 px-9">
+          <span className="text-xs font-bold max-w-[120px] truncate" style={{ color: C.navyDark }}>
+            {tx.from_name || '—'}
+          </span>
+          <span className="text-xs font-bold max-w-[120px] truncate text-right" style={{ color: C.navyDark }}>
+            {tx.to_name || '—'}
+          </span>
+        </div>
       </div>
 
-      {/* From */}
-      <div className="flex items-center gap-2.5 w-32 shrink-0">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
-          style={{ backgroundColor: done ? '#9ca3af' : '#ef4444' }}>
-          {tx.from_name?.[0]?.toUpperCase() || '?'}
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-gray-400">Dari</p>
-          <p className="text-sm font-bold truncate" style={{ color: C.navyDark }}>{tx.from_name || '—'}</p>
-        </div>
-      </div>
+      {/* Detail panel — muncul saat open */}
+      {open && (
+        <div className="px-4 pb-4 pt-0 border-t border-gray-50 space-y-3">
+          <div className="flex items-center justify-between pt-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black"
+                style={{ backgroundColor: done ? '#9ca3af' : '#ef4444' }}>
+                {tx.from_name?.[0]?.toUpperCase() || '?'}
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Dari</p>
+                <p className="text-sm font-bold" style={{ color: C.navyDark }}>{tx.from_name || '—'}</p>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <p className="text-sm font-black" style={{ color: C.navyDark }}>{rupiah(tx.amount)}</p>
+              <ArrowRight size={14} style={{ color: C.teal }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <p className="text-xs text-gray-400">Ke</p>
+                <p className="text-sm font-bold" style={{ color: C.navyDark }}>{tx.to_name || '—'}</p>
+              </div>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white text-xs font-black"
+                style={{ backgroundColor: done ? '#9ca3af' : C.teal }}>
+                {tx.to_name?.[0]?.toUpperCase() || '?'}
+              </div>
+            </div>
+          </div>
 
-      {/* Arrow + amount */}
-      <div className="flex-1 flex flex-col items-center gap-1.5">
-        <p className="text-sm font-black" style={{ color: done ? '#9ca3af' : C.navyDark }}>{rupiah(tx.amount)}</p>
-        <div className="flex items-center gap-1 w-full">
-          <div className="flex-1 h-0.5 rounded-full" style={{ backgroundColor: done ? '#e5e7eb' : `${C.teal}40` }} />
-          <ArrowRight size={14} style={{ color: done ? '#9ca3af' : C.teal }} />
+          {/* Tombol tandai selesai */}
+          <button onClick={(e) => { e.stopPropagation(); setDone(p => !p) }}
+            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold border-2 transition-all"
+            style={{
+              borderColor: done ? C.teal : '#e5e7eb',
+              backgroundColor: done ? `${C.teal}15` : 'transparent',
+              color: done ? C.teal : '#6b7280',
+            }}>
+            <CheckCircle2 size={15} />
+            {done ? 'Sudah ditransfer ✓' : 'Tandai sudah ditransfer'}
+          </button>
         </div>
-      </div>
-
-      {/* To */}
-      <div className="flex items-center gap-2.5 w-32 justify-end shrink-0">
-        <div className="text-right min-w-0">
-          <p className="text-xs text-gray-400">Ke</p>
-          <p className="text-sm font-bold truncate" style={{ color: C.navyDark }}>{tx.to_name || '—'}</p>
-        </div>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black shrink-0"
-          style={{ backgroundColor: done ? '#9ca3af' : C.teal }}>
-          {tx.to_name?.[0]?.toUpperCase() || '?'}
-        </div>
-      </div>
-
-      {/* Check button */}
-      <button onClick={() => setDone(p => !p)}
-        className="w-9 h-9 rounded-xl flex items-center justify-center border-2 transition-all shrink-0 hover:scale-105 active:scale-95"
-        style={{
-          borderColor: done ? C.teal : '#e5e7eb',
-          backgroundColor: done ? `${C.teal}15` : 'transparent',
-        }}>
-        <CheckCircle2 size={16} style={{ color: done ? C.teal : '#d1d5db' }} />
-      </button>
+      )}
     </div>
   )
 }
@@ -198,6 +248,7 @@ export default function SimplifyDebt() {
   const [loading, setLoading]         = useState(false)
   const [loadingGrup, setLoadingGrup] = useState(true)
   const [error, setError]             = useState('')
+  const [transferOpen, setTransferOpen] = useState(true)
 
   useEffect(() => {
   if (!user?.id) return
@@ -325,7 +376,7 @@ export default function SimplifyDebt() {
 
             {/* ── Stat cards ────────────────────────────────────────────── */}
             {!loading && !error && (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
                 <StatCard
                   label="Jumlah Transfer"
                   value={transfers.length}
@@ -353,7 +404,7 @@ export default function SimplifyDebt() {
             {/* ── Loading ───────────────────────────────────────────────── */}
             {loading && (
               <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
                   {[1,2,3].map(i => <Sk key={i} className="h-24" />)}
                 </div>
                 {[1,2,3].map(i => <Sk key={i} className="h-20" />)}
@@ -378,7 +429,10 @@ export default function SimplifyDebt() {
 
                 {/* Transfer list */}
                 <div>
-                  <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => setTransferOpen(p => !p)}
+                    className="flex items-center gap-2 mb-3 w-full text-left"
+                  >
                     <GitMerge size={14} style={{ color: C.teal }} />
                     <span className="text-xs font-bold uppercase tracking-wide text-gray-400">Rencana Transfer Optimal</span>
                     {transfers.length > 0 && (
@@ -387,9 +441,13 @@ export default function SimplifyDebt() {
                         {transfers.length}
                       </span>
                     )}
-                  </div>
+                    <ChevronDown
+                      size={14}
+                      className={`ml-auto text-gray-400 transition-transform duration-200 ${transferOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
 
-                  {transfers.length === 0 ? (
+                  {transferOpen && transfers.length === 0 ? (
                     <div className="rounded-2xl bg-white border border-gray-100 shadow-sm">
                       <div className="flex flex-col items-center gap-3 py-14 text-center">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl"
@@ -403,11 +461,11 @@ export default function SimplifyDebt() {
                         </p>
                       </div>
                     </div>
-                  ) : (
+                  ) : transferOpen ?(
                     <div className="space-y-3">
                       {transfers.map((tx, i) => <TransferRow key={i} tx={tx} idx={i} />)}
                     </div>
-                  )}
+                  ) : null }
                 </div>
 
                 {/* Member balances */}

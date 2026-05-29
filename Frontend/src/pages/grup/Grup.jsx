@@ -619,9 +619,9 @@ export default function GrupPage() {
   )
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#F7F8FC]">
+    <div className="flex h-full overflow-hidden bg-[#F7F8FC] relative">
       {/* ──────── KIRI: list panel ──────── */}
-      <div className="flex w-full flex-col overflow-hidden lg:w-[380px] xl:w-[420px] shrink-0
+      <div className="flex w-full flex-col overflow-hidden lg:w-[380px] xl:w-[420px] lg:shrink-0
         border-r border-gray-100 bg-white">
 
         {/* Header */}
@@ -718,7 +718,12 @@ export default function GrupPage() {
       </div>
 
       {/* ──────── KANAN: detail panel ──────── */}
-      <div className="hidden lg:flex flex-1 flex-col overflow-y-auto p-6">
+      <div className={`
+          flex flex-1 flex-col overflow-y-auto p-4 sm:p-6
+          ${selected
+            ? 'fixed inset-0 z-30 bg-[#F7F8FC] lg:relative lg:inset-auto lg:z-auto'
+            : 'hidden lg:flex'}
+        `}>        
         {selected ? (
           <DetailPanel
             grup={selected}

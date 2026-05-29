@@ -397,10 +397,10 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="min-h-screen p-6" style={{ backgroundColor: '#f4f6fb' }}>
+    <div className="min-h-screen p-3 sm:p-6" style={{ backgroundColor: '#f4f6fb' }}>
 
               {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl p-6 mb-6 text-white"
+        <div className="relative overflow-hidden rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 text-white"
           style={{ background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMid} 55%, ${C.blue} 100%)` }}>
           {/* Decorasi */}
           <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full opacity-10"
@@ -416,7 +416,7 @@ export default function Dashboard() {
             <rect width="100%" height="100%" fill="url(#dash-dots)" />
           </svg>
 
-          <div className="relative z-10 flex items-start justify-between gap-4">
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="flex-1">
               {/* Badge tanggal + akun aktif */}
               <div className="flex items-center gap-2 mb-3">
@@ -454,15 +454,15 @@ export default function Dashboard() {
         )}
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
         {statCards.map((s) => (
           <StatCard key={s.label} {...s} loading={loading} />
         ))}
       </div>
 
       {/* Main Grid */}
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-2 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="col-span-1 lg:col-span-2 space-y-5">
           <GrupPatunganCard grupList={grupList} loading={loading} />
           <TransaksiCard transaksi={transaksi} loading={loading} />
         </div>

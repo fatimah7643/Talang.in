@@ -121,12 +121,12 @@ function TxRow({ tx }) {
   const total = tx.total_amount ?? tx.amount ?? 0
 
   return (
-    <div className="grid items-center gap-0 border-b border-gray-50 last:border-0
-      hover:bg-gray-50 transition-colors cursor-pointer"
+    <div className="flex flex-col sm:grid items-start sm:items-center gap-0 border-b border-gray-50 last:border-0
+      hover:bg-gray-50 transition-colors cursor-pointer px-4 sm:px-0 py-3 sm:py-0"
       style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 56px' }}
     >
       {/* Nama */}
-      <div className="flex items-center gap-3 px-4 py-3.5 min-w-0">
+     <div className="flex items-center gap-3 sm:px-4 sm:py-3.5 min-w-0 w-full">
         <div
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl"
           style={{ backgroundColor: col.bg, color: col.text }}
@@ -140,7 +140,7 @@ function TxRow({ tx }) {
       </div>
 
       {/* Kategori */}
-      <div className="px-4 py-3.5">
+      <div className="sm:px-4 sm:py-3.5">
         {kat ? (
           <span
             className="inline-block rounded-full px-2.5 py-0.5 text-xs font-medium"
@@ -154,12 +154,12 @@ function TxRow({ tx }) {
       </div>
 
       {/* Nominal */}
-      <div className="px-4 py-3.5 text-right">
+      <div className="sm:px-4 sm:py-3.5 sm:text-right">
         <p className="text-sm font-medium text-red-500">{rupiah(total)}</p>
       </div>
 
       {/* Pembayar */}
-      <div className="px-4 py-3.5">
+      <div className="sm:px-4 sm:py-3.5">
         <p className="text-sm text-gray-600">{tx.paid_by_name || tx.pembayar || '—'}</p>
         {tx.group_name && (
           <p className="text-xs text-gray-400 mt-0.5 truncate">{tx.group_name}</p>
@@ -167,7 +167,7 @@ function TxRow({ tx }) {
       </div>
 
       {/* Aksi */}
-      <div className="px-4 py-3.5 flex justify-center">
+      <div className="sm:px-4 sm:py-3.5 flex justify-start sm:justify-center">
         <button
           className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100
             text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-all"
@@ -261,7 +261,7 @@ export default function Riwayat() {
 
       {/* ── Topbar ── */}
       <header className="flex items-center justify-between border-b border-gray-100 bg-white
-        px-6 py-3.5 shrink-0 gap-4 flex-wrap">
+        px-3 sm:px-6 py-3.5 shrink-0 gap-2 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E1F5EE]">
             <Clock size={18} className="text-[#1D9E75]" />
@@ -359,7 +359,7 @@ export default function Riwayat() {
             {/* ── Filter Row ── */}
             <div className="flex gap-2 flex-wrap">
               {/* Search */}
-              <div className="flex flex-1 min-w-[180px] items-center gap-2 rounded-xl border border-gray-200
+              <div className="flex flex-1 min-w-0 items-center gap-2 rounded-xl border border-gray-200
                 bg-white px-3 py-2 transition-all focus-within:border-[#1D9E75] focus-within:ring-2 focus-within:ring-[#1D9E75]/10">
                 <Search size={14} className="text-gray-400 shrink-0" />
                 <input
@@ -435,7 +435,7 @@ export default function Riwayat() {
               <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
                 {/* Table Head */}
                 <div
-                  className="grid border-b border-gray-100 px-4 py-2.5 bg-gray-50"
+                  className="hidden sm:grid border-b border-gray-100 px-4 py-2.5 bg-gray-50"
                   style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr 56px' }}
                 >
                   {['Nama Transaksi', 'Kategori', 'Nominal', 'Pembayar', ''].map((h, i) => (

@@ -357,7 +357,7 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm">
       <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0">
+        <div className="flex items-center justify-between flex-wrap px-6 pt-5 pb-4 shrink-0 gap-2">
           <div className="flex items-center gap-3">
             {step === 2 && (
               <button onClick={() => setStep(1)}
@@ -781,7 +781,7 @@ function ModalNLP({ grups, onClose, onAdded }) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/50 backdrop-blur-sm">
       <div className="w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0">
+        <div className="flex items-center justify-between flex-wrap px-6 pt-5 pb-4 shrink-0 gap-2">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-gradient-to-br from-[#36ADA3] to-[#232F72] shrink-0">
               <Sparkles size={16} className="text-white" />
@@ -976,7 +976,7 @@ function ModalDetail({ trx, onClose, grups = [], onDeleted }) {
                       </div>
                       <span className="text-sm text-gray-700">{s.member_name || '—'}</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-bold text-gray-800">{rupiah(s.share_amount)}</span>
                       {s.is_paid
                         ? <CheckCircle2 size={14} className="text-[#36ADA3]" />
@@ -1102,8 +1102,10 @@ function FilterBar({ grups, filters, onChange, onReset }) {
         <ChevronDown size={13} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute right-0 top-12 z-20 w-72 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Filter Transaksi</p>
+        <div className="fixed sm:absolute inset-x-2 sm:inset-x-auto sm:right-0 sm:left-auto top-[120px] sm:top-12 z-20 w-auto sm:w-72 rounded-2xl border border-gray-100 bg-white p-4 shadow-2xl">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Filter Transaksi</p>
+
           <div className="space-y-3">
             <div>
               <label className="block text-xs text-gray-500 mb-1">Grup</label>
@@ -1181,16 +1183,17 @@ function PanduanFAB() {
   return (
     <div className="fixed bottom-6 right-6 z-40 flex items-center justify-end">
       {/* Teks muncul saat expanded */}
-      <div className={`overflow-hidden transition-all duration-300 ease-out ${expanded ? 'max-w-xs opacity-100 mr-3' : 'max-w-0 opacity-0 mr-0'}`}>
-        <Link
-          to="/panduan-ai"
-          className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap"
-          style={{ background: 'linear-gradient(135deg, #232F72 0%, #36ADA3 100%)', boxShadow: '0 4px 14px rgba(35,47,114,0.3)' }}
-        >
-          Bingung nulis format AI? Lihat panduan
-          <ChevronRight size={14} />
-        </Link>
-      </div>
+      <div className={`overflow-hidden transition-all duration-300 ease-out ${expanded ? 'max-w-[260px] opacity-100 mr-3' : 'max-w-0 opacity-0 mr-0'}`}>
+      <Link
+        to="/panduan-ai"
+        className="flex items-center gap-2 rounded-2xl px-3 py-2.5 text-xs sm:text-sm font-semibold text-white"
+        style={{ background: 'linear-gradient(135deg, #232F72 0%, #36ADA3 100%)', boxShadow: '0 4px 14px rgba(35,47,114,0.3)', whiteSpace: 'nowrap' }}
+      >
+        <span className="hidden sm:inline">Bingung nulis format AI?</span>
+        <span>Lihat panduan</span>
+        <ChevronRight size={14} />
+      </Link>
+    </div>
       {/* Tombol bulat */}
       <button
         onClick={() => setExpanded(p => !p)}
@@ -1329,8 +1332,8 @@ export default function TransaksiPage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#F7F8FC]">
       {/* ── TOPBAR ── */}
-      <header className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4 shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center justify-between border-b border-gray-100 bg-white px-3 sm:px-6 py-3 shrink-0 gap-2 flex-wrap">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl shrink-0 bg-[#36ADA3]/15">
             <ArrowLeftRight size={18} className="text-[#36ADA3]" />
           </div>
@@ -1360,7 +1363,7 @@ export default function TransaksiPage() {
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
         {/* Summary cards */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <SummaryCard icon={Wallet}     label="Total Pengeluaran" value={rupiah(summary.total)}
             accent="bg-[#232F72]" sub={`${summary.count} transaksi`} />
           <SummaryCard icon={BarChart2}  label="Semua Transaksi"   value={summary.count}
@@ -1372,7 +1375,7 @@ export default function TransaksiPage() {
         </div>
 
         {/* Search + Filter bar */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 shadow-sm">
             <Search size={15} className="text-gray-400 shrink-0" />
             <input type="text" placeholder="Cari transaksi, kategori, grup..."

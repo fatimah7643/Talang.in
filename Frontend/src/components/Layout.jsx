@@ -23,13 +23,13 @@ const Layout = ({ children }) => {
   }, [])
 
   return (
-    <div className="flex min-h-screen" style={{ backgroundColor: '#f8f9fa' }}>
+    <div className="flex min-h-screen overflow-x-hidden" style={{ backgroundColor: '#f8f9fa' }}>
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         unreadCount={unreadCount}
       />
-      <main className="flex-1 lg:ml-56 min-h-screen">
+      <main className="flex-1 lg:ml-56 min-h-screen overflow-x-hidden">
         <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-0 z-20">
           <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl border border-gray-200 hover:bg-gray-50 transition">
             <Menu size={18} style={{ color: C.navy }} />

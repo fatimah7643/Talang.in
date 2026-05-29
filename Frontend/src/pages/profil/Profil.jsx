@@ -283,7 +283,7 @@ const handleUploadAvatar = async () => {
     <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
 
       {/* ── Topbar ── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center"
             style={{ backgroundColor: `${C.teal}18` }}>
@@ -303,8 +303,8 @@ const handleUploadAvatar = async () => {
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-5">
 
         {/* ── Avatar card ── */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3 sm:gap-4">
             {loading ? (
               <div className="w-16 h-16 rounded-full bg-gray-100 animate-pulse shrink-0" />
             ) : (
@@ -351,11 +351,11 @@ const handleUploadAvatar = async () => {
                     {profile?.full_name ?? profile?.name ?? '-'}
                   </p>
                   <p className="text-sm text-gray-500">{profile?.email ?? '-'}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold text-white"
                       style={{ backgroundColor: C.navy }}>Premium User</span>
                     {userId && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 text-gray-500">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium border border-gray-200 text-gray-500 max-w-[120px] truncate">
                         {userId}
                       </span>
                     )}
@@ -370,7 +370,7 @@ const handleUploadAvatar = async () => {
             </div>
           </div>
           {isEditing ? (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
               <button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
@@ -398,16 +398,15 @@ const handleUploadAvatar = async () => {
         </div>
 
         {/* ── 2 col layout ── */}
-        <div className="grid grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* LEFT: Informasi Akun */}
-          <div className="col-span-2 space-y-5">
+          <div className="col-span-1 lg:col-span-2 space-y-5">
 
             {/* Informasi Akun */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
               <h2 className="text-base font-bold" style={{ color: C.navyDark }}>Informasi Akun</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <Input label="Nama Lengkap" id="name" icon={User}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">                <Input label="Nama Lengkap" id="name" icon={User}
                   value={editForm.name} placeholder="Nama lengkap kamu"
                   disabled={!isEditing}
                   onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))}

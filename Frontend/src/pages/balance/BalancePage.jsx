@@ -450,7 +450,7 @@ function GrupSelector({ grups, selected, onChange }) {
       <button
         onClick={() => setOpen(p => !p)}
         className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2
-          text-sm font-medium text-gray-700 hover:border-gray-300 transition-all"
+          text-sm font-medium text-gray-700 max-w-[160px] hover:border-gray-300 transition-all"
       >
         <Users size={14} className="text-gray-400" />
         {cur?.name || 'Pilih Grup'}
@@ -616,7 +616,7 @@ export default function BalancePage() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
       {/* ── Topbar ── */}
-      <header className="flex items-center justify-between border-b border-gray-100 bg-white px-6 py-3.5 shrink-0 gap-4">
+      <header className="flex items-center justify-between border-b border-gray-100 bg-white px-3 sm:px-6 py-3 shrink-0 gap-2 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#E1F5EE]">
             <Wallet size={18} className="text-[#1D9E75]" />

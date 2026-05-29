@@ -177,8 +177,8 @@ export default function Notifikasi() {
     <div className="min-h-screen" style={{ backgroundColor: C.bg }}>
 
       {/* ── Topbar ── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
 
           {/* Judul + icon */}
           <div className="flex items-center gap-3">
@@ -192,52 +192,52 @@ export default function Notifikasi() {
             </div>
           </div>
 
-          {/* Actions — semua tombol dalam satu baris */}
-          <div className="flex items-center gap-3">
-
-            {/* Search */}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-400">
-              <Search size={14} />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Cari notifikasi..."
-                className="bg-transparent outline-none text-gray-600 placeholder-gray-400 w-44 text-sm"
-              />
-            </div>
+          {/* Actions — icon only di mobile, full di desktop */}
+          <div className="flex items-center gap-2">
 
             {/* Tandai semua dibaca */}
             <button
               onClick={handleMarkAll}
               disabled={markingAll || unread.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition hover:bg-gray-50 disabled:opacity-40"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border transition hover:bg-gray-50 disabled:opacity-40"
               style={{ borderColor: C.navy, color: C.navy }}
             >
               {markingAll
                 ? <RefreshCw size={14} className="animate-spin" />
                 : <CheckCheck size={14} />}
-              Tandai semua dibaca
+              <span className="hidden sm:inline">Tandai semua dibaca</span>
             </button>
 
             {/* Hapus semua */}
             <button
               onClick={handleDeleteAll}
               disabled={deletingAll || notifs.length === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border transition hover:bg-red-50 disabled:opacity-40"
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border transition hover:bg-red-50 disabled:opacity-40"
               style={{ borderColor: '#ef4444', color: '#ef4444' }}
             >
               {deletingAll
                 ? <RefreshCw size={14} className="animate-spin" />
                 : <Trash2 size={14} />}
-              Hapus semua
+              <span className="hidden sm:inline">Hapus semua</span>
             </button>
 
           </div>
         </div>
 
+         {/* Search — tambah di SINI */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm text-gray-400 mt-2 mb-2">
+          <Search size={14} className="shrink-0" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Cari notifikasi..."
+            className="bg-transparent outline-none text-gray-600 placeholder-gray-400 w-full text-sm"
+          />
+        </div>
+
         {/* Pill Tabs */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
           {tabs.map(({ id, label }) => {
             const isActive = activeTab === id
             return (

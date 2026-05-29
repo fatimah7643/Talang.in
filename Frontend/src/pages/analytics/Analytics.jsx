@@ -107,7 +107,7 @@ function StatCard({ label, value, sub, icon: Icon, color, trend }) {
         </div>
       </div>
       <div>
-        <p className="text-2xl font-black tracking-tight" style={{ color: C.navyDark }}>{value}</p>
+        <p className="text-lg sm:text-2xl font-black tracking-tight break-all" style={{ color: C.navyDark }}>{value}</p>
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
       </div>
       {trend !== undefined && (
@@ -670,8 +670,8 @@ export default function Analytics() {
     <div className="flex flex-col min-h-screen" style={{ backgroundColor: C.bg }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 sticky top-0 z-10">
-        <div className="flex items-center justify-between gap-4">
+      <div className="bg-white border-b border-gray-100 px-3 sm:px-6 py-3 sticky top-0 z-10">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl"
               style={{ backgroundColor: `${C.teal}18` }}>
