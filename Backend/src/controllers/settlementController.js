@@ -315,3 +315,45 @@ export const markAsPaid = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// GET /api/v1/settlements/:group_id/settled-summary
+export const getSettledSummary = async (req, res) => {
+  try {
+    const { group_id } = req.params;
+
+    // Ambil semua bill_ids dari grup ini dulu
+    const { data: bills, error: billsError } = await supabase
+      .from('bills')
+      .select('id')
+      .eq('group_id', group_id);
+
+    if (billsError) throw billsError;
+    if (!bills || bills.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: { settled_amount: 0, settled_count: 0 }
+      });
+    }
+
+    const billIds = bills.map(b => b.id);
+
+    // Sum semua splits yang is_paid = true
+    const { data: splits, error: splitsError } = await supabase
+      .from('bill_splits')
+      .select('amount_paid')
+      .in('bill_id', billIds)
+      .eq('is_paid', true);
+
+    if (splitsError) throw splitsError;
+
+    const settled_amount = (splits || []).reduce((sum, s) => sum + Number(s.amount_paid), 0);
+    const settled_count = splits?.length || 0;
+
+    return res.status(200).json({
+      success: true,
+      data: { settled_amount, settled_count }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
