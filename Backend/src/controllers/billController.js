@@ -424,6 +424,8 @@ export const splitBillNLP = async (req, res) => {
 
     const hasCustomFromText = Object.keys(personAmountMap).length > 0;
 
+    
+
     // ── STEP 2b: Pilih branch kalkulasi split ──────────────────
     //
     //  Branch A: "berlima/berempat/dst" — equal split dengan N orang dari teks
@@ -431,7 +433,7 @@ export const splitBillNLP = async (req, res) => {
     //  Branch C: Custom amount per orang (dari teks, misal "Risna 50rb, Budi 30rb")
     //  Branch D: Equal fallback — semua group_members dibagi rata
     //
-    if (groupSizeFromText !== null && !hasCustomFromText) {
+    if (groupSizeFromText !== null) {
       // ── Branch A: "berlima" / "berempat" / dst ──
       // Pakai N orang dari group_members, dibagi rata, payer tidak ditagih
       finalSplitMethod = 'equal';
@@ -623,6 +625,9 @@ export const splitBillNLP = async (req, res) => {
     const bill = billData[0];
 
     // Buat split rows, pastikan participant.id ada dan bukan payer
+
+    
+
     const splitRows = finalParticipants
       .filter(p => p.id && p.id !== payerProfile.id)  // ← guard: skip kalau id undefined/payer
       .map(p => ({
@@ -632,6 +637,8 @@ export const splitBillNLP = async (req, res) => {
         amount_paid:  0,
         is_paid:      false
       }));
+
+    
 
     if (splitRows.length > 0) {
       const { error: splitError } = await supabase
