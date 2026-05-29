@@ -229,7 +229,22 @@ export default function SimplifyDebt() {
       }
       if (recapRes.status === 'fulfilled') {
         const raw = recapRes.value.data?.data || recapRes.value.data || []
-        setMembers(Array.isArray(raw) ? raw : [])
+        const rawArr = Array.isArray(raw) ? raw : []
+
+        // Normalize recap response ke format MemberRow expects
+        // Backend: [{ debtor_id, debtor_name, creditor_id, creditor_name, total_debt }]
+        // MemberRow expects: { user_id, name, net_balance }
+        const balanceMap = {}
+        rawArr.forEach(item => {
+          if (!balanceMap[item.debtor_id])
+            balanceMap[item.debtor_id] = { user_id: item.debtor_id, name: item.debtor_name, net_balance: 0 }
+          if (!balanceMap[item.creditor_id])
+            balanceMap[item.creditor_id] = { user_id: item.creditor_id, name: item.creditor_name, net_balance: 0 }
+          // Debtor: net negatif (hutang), creditor: net positif (piutang)
+          balanceMap[item.debtor_id].net_balance   -= Number(item.total_debt)
+          balanceMap[item.creditor_id].net_balance += Number(item.total_debt)
+        })
+        setMembers(Object.values(balanceMap))
       }
       if (simplifyRes.status === 'rejected' && recapRes.status === 'rejected')
         setError('Gagal memuat data simplify debt.')

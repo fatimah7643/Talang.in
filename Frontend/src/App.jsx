@@ -20,6 +20,7 @@ import SyaratKetentuan from './pages/legal/SyaratKetentuan'
 import KebijakanPrivasi from './pages/legal/KebijakanPrivasi'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
+import PanduanAI from './pages/panduan/PanduanAI'
 
 const App = () => {
   return (
@@ -77,6 +78,11 @@ const App = () => {
           <Route path="/simplify" element={
             <ProtectedRoute>
               <Layout><SimplifyDebt /></Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/panduan-ai" element={
+            <ProtectedRoute>
+              <Layout><PanduanAI /></Layout>
             </ProtectedRoute>
           } />
           {/* Legal — public */}

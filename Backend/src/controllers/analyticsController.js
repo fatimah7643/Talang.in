@@ -162,38 +162,162 @@ export const getHealthScore = async (req, res) => {
 export const getConflicts = async (req, res) => {
   try {
     const { group_id } = req.params;
-
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
-    const { data: logs, error } = await supabase
-      .from('activity_logs')
-      .select('*')
-      .eq('group_id', group_id)
-      .gte('created_at', since)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
     const conflicts = [];
-    const seen = {};
 
-    (logs || []).forEach(log => {
-      if (log.action_type !== 'BILL_CREATED') return;
-      const meta = log.metadata || {};
-      const key = `${meta.amount}_${meta.category}`;
+    // Ambil semua bills
+    const { data : bills, error: billsError } = await supabase
+      .from('bills')
+      .select('*')
+      .eq('group_id', group_id);
 
-      if (seen[key]) {
-        conflicts.push({
-          type: 'DUPLICATE_TRANSACTION',
-          severity: 'warning',
-          message: `Terdeteksi kemungkinan tagihan duplikat: kategori "${meta.category}" dengan nominal Rp${Number(meta.amount).toLocaleString()} dicatat lebih dari sekali dalam 24 jam.`,
-          log_ids: [seen[key].id, log.id],
-          timestamps: [seen[key].created_at, log.created_at]
-        });
-      } else {
-        seen[key] = log;
-      }
+    if (billsError) throw billsError;
+    if (!bills?.length) {
+      return res.status(200).json({
+        success: true,
+        group_id,
+        conflict_count: 0,
+        status: 'Aman',
+        conflicts: []
+      });
+    }
+    
+    const billIds = bills.map(b => b.id);
+
+    //Ambil semua splits
+    const { data: splits, error: splitsError } = await supabase
+      .from('bill_splits')
+      .select('id, bill_id, member_id, share_amount, amount_paid, is_paid, created_at')
+      .in('bill_id', billIds);
+
+    if (splitsError) throw splitsError;
+    if (!splits?.length) {
+      return res.status(200).json({ 
+        success: true,
+        group_id,
+        conflict_count: 0,
+        status: 'Aman',
+        conflicts: []
+      })
+    }
+
+    // Resolve nama member
+    const memberIds = [...new Set([
+      ...splits.map(s => s.member_id),
+      ...bills.map(b => b.payer_id),
+    ])];
+    const { data: profiles } = await supabase
+      .from('profiles').select('id, full_name, username').in('id', memberIds);
+    const profileMap = {};
+    (profiles || []).forEach(p => { profileMap[p.id] = p.full_name || p.username || '—'; });
+
+    // ── Konflik 1: Debt ratio sangat tinggi ─────────────────────────────
+    const totalAmount  = splits.reduce((sum, s) => sum + Number(s.share_amount), 0);
+    const unpaidAmount = splits
+      .filter(s => !s.is_paid)
+      .reduce((sum, s) => sum + Number(s.share_amount) - Number(s.amount_paid), 0);
+    const debtRatio = totalAmount > 0 ? unpaidAmount / totalAmount : 0;
+
+    if (debtRatio > 0.7) {
+      conflicts.push({
+        type: 'HIGH_DEBT_RATIO',
+        severity: 'high',
+        title: 'Tingkat Hutang Sangat Tinggi',
+        description: `${Math.round(debtRatio * 100)}% dari total tagihan (Rp${Math.round(unpaidAmount).toLocaleString('id-ID')}) belum terbayar. Grup ini berisiko jika dibiarkan terlalu lama — segera lakukan rekonsiliasi bersama.`,
+        involved_users: []
+      });
+    } else if (debtRatio > 0.4) {
+      conflicts.push({
+        type: 'MEDIUM_DEBT_RATIO',
+        severity: 'medium',
+        title: 'Hutang Mulai Menumpuk',
+        description: `${Math.round(debtRatio * 100)}% dari total tagihan belum terbayar (Rp${Math.round(unpaidAmount).toLocaleString('id-ID')}). Sebaiknya segera dorong anggota untuk menyelesaikan kewajibannya.`,
+        involved_users: []
+      });
+    }
+
+    // ── Konflik 2: Satu anggota nanggung mayoritas biaya ────────────────
+    const payerMap = {};
+    bills.forEach(b => {
+      payerMap[b.payer_id] = (payerMap[b.payer_id] || 0) + Number(b.amount);
     });
+    const totalBillAmount = bills.reduce((sum, b) => sum + Number(b.amount), 0);
+    const payerEntries = Object.entries(payerMap);
+
+    if (payerEntries.length > 1) {
+      for (const [payerId, paidAmount] of payerEntries) {
+        const ratio = totalBillAmount > 0 ? paidAmount / totalBillAmount : 0;
+        if (ratio > 0.6) {
+          conflicts.push({
+            type: 'PAYER_IMBALANCE',
+            severity: 'medium',
+            title: 'Beban Pembayaran Tidak Merata',
+            description: `${profileMap[payerId] || 'Satu anggota'} menanggung ${Math.round(ratio * 100)}% dari seluruh pengeluaran grup (Rp${Math.round(paidAmount).toLocaleString('id-ID')}). Pertimbangkan rotasi giliran bayar di transaksi berikutnya.`,
+            involved_users: [profileMap[payerId] || '—']
+          });
+          break;
+        }
+      }
+    }
+
+    // ── Konflik 3: Anggota yang belum pernah bayar sama sekali ──────────
+    const memberPayMap = {};
+    splits.forEach(s => {
+      if (!memberPayMap[s.member_id]) memberPayMap[s.member_id] = { paid: 0, owed: 0 };
+      memberPayMap[s.member_id].owed += Number(s.share_amount);
+      memberPayMap[s.member_id].paid += Number(s.amount_paid);
+    });
+
+    const neverPaid = Object.entries(memberPayMap)
+      .filter(([, v]) => v.owed > 0 && v.paid === 0)
+      .map(([id]) => profileMap[id] || '—');
+
+    if (neverPaid.length > 0) {
+      conflicts.push({
+        type: 'ZERO_PAYMENT_MEMBERS',
+        severity: neverPaid.length >= 2 ? 'high' : 'medium',
+        title: `${neverPaid.length} Anggota Belum Pernah Membayar`,
+        description: `Anggota berikut punya hutang tapi belum pernah melakukan pembayaran apapun: ${neverPaid.join(', ')}. Segera komunikasikan sebelum hutang semakin menumpuk.`,
+        involved_users: neverPaid
+      });
+    }
+
+
+    // ── Konflik 4: Tagihan overdue > 30 hari belum lunas ────────────────
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const overdueSplits = splits.filter(s => !s.is_paid && s.created_at < thirtyDaysAgo);
+
+    if (overdueSplits.length > 0) {
+      const overdueAmount = overdueSplits.reduce(
+        (sum, s) => sum + Number(s.share_amount) - Number(s.amount_paid), 0
+      );
+      conflicts.push({
+        type: 'OVERDUE_BILLS',
+        severity: 'medium',
+        title: `${overdueSplits.length} Tagihan Belum Lunas Lebih dari 30 Hari`,
+        description: `Total Rp${Math.round(overdueAmount).toLocaleString('id-ID')} dari tagihan yang sudah lebih dari 30 hari belum diselesaikan. Semakin lama dibiarkan, semakin sulit untuk ditagih.`,
+        involved_users: []
+      });
+    }
+
+    // ── Konflik 5: Ada anggota dengan hutang sangat besar dibanding lainnya
+    const memberDebts = Object.entries(memberPayMap)
+      .filter(([, v]) => v.owed > v.paid)
+      .map(([id, v]) => ({ id, name: profileMap[id] || '—', debt: v.owed - v.paid }))
+      .sort((a, b) => b.debt - a.debt);
+
+    if (memberDebts.length >= 2) {
+      const maxDebt = memberDebts[0].debt;
+      const avgDebt = memberDebts.reduce((s, m) => s + m.debt, 0) / memberDebts.length;
+      if (maxDebt > avgDebt * 2.5) {
+        conflicts.push({
+          type: 'DEBT_CONCENTRATION',
+          severity: 'medium',
+          title: 'Konsentrasi Hutang pada Satu Anggota',
+          description: `${memberDebts[0].name} memiliki hutang Rp${Math.round(maxDebt).toLocaleString('id-ID')} — jauh lebih besar dari rata-rata anggota lain (Rp${Math.round(avgDebt).toLocaleString('id-ID')}). Perlu perhatian khusus agar tidak menghambat keseimbangan grup.`,
+          involved_users: [memberDebts[0].name]
+        });
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -207,7 +331,8 @@ export const getConflicts = async (req, res) => {
   }
 };
 
-// GET /api/v1/analytics/:group_id/conflict-status  (versi simpel dari app.js lama)
+
+// GET /api/v1/analytics/:group_id/conflict-status  
 export const getConflictStatus = async (req, res) => {
   try {
     const { group_id } = req.params;

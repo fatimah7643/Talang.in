@@ -507,6 +507,10 @@ export default function BalancePage() {
   const [showSimplify, setShowSimplify] = useState(false)
   const [modalSettle, setModalSettle]   = useState(null)
   const [tab, setTab]                   = useState('debts')
+  // akumulasi total yang sudah lunas dan jumlah transaksi yang sudah lunas, untuk ditampilkan di summary card
+  const [settledAmount, setSettledAmount] = useState(0)
+  const [settledCount, setSettledCount]   = useState(0)
+
 
   const meId = user?.id
 
@@ -585,15 +589,17 @@ export default function BalancePage() {
   }, [selectedGrup, fetchBalance])
 
   const handleSettled = (debt) => {
+    // Hapus dari list aktif + track ke settled state
     setDebts(p => p.filter(d =>
       !(d.from_user_id === debt.from_user_id && d.to_user_id === debt.to_user_id)
     ))
-    fetchBalance(selectedGrup)
+    setSettledAmount(prev => prev + (debt.amount || 0))
+    setSettledCount(prev => prev + 1)
+    setTimeout(() => fetchBalance(selectedGrup), 500)
   }
 
   const myDebt    = debts.filter(d => d.from_user_id === meId && d.status !== 'settled').reduce((a, d) => a + (d.amount || 0), 0)
   const myReceive = debts.filter(d => d.to_user_id   === meId && d.status !== 'settled').reduce((a, d) => a + (d.amount || 0), 0)
-  const settledTotal = debts.filter(d => d.status === 'settled').reduce((a, d) => a + (d.amount || 0), 0)
   const net = myReceive - myDebt
 
   const activeDebts  = debts.filter(d => d.status !== 'settled')
@@ -703,8 +709,8 @@ export default function BalancePage() {
               />
               <SummaryCard
                 label="Sudah Lunas"
-                value={rupiah(settledTotal)}
-                sub={`${settledDebts.length} transaksi selesai`}
+                value={rupiah(settledAmount)}
+                sub={`${settledCount} transaksi selesai`}
                 dotColor="bg-gray-300"
                 valueColor="text-gray-500"
                 subColor="text-gray-400"

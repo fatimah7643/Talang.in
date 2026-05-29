@@ -9,6 +9,8 @@ import {
 import api from '../../services/api'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { Link } from 'react-router-dom'
+import { Lightbulb } from 'lucide-react'
 
 /* ─────────────────────── CONSTANTS ─────────────────────────── */
 const KATEGORI = [
@@ -50,19 +52,6 @@ const Sk = ({ className = '' }) => (
   <div className={`animate-pulse rounded-lg bg-gray-100 ${className}`} />
 )
 
-/* ─────────────────────── FUZZY NAME MATCH ──────────────────────── */
-const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-const fuzzyMatchName = (query, fullName) => {
-  const q = normalize(query)
-  const parts = (fullName || '').toLowerCase().split(/\s+/)
-  return parts.some(p => normalize(p).startsWith(q) || q.startsWith(normalize(p)))
-}
-const extractMembersFromText = (text, members) => {
-  const words = text.toLowerCase().split(/\s+/)
-  return members.filter(m =>
-    words.some(w => w.length >= 3 && fuzzyMatchName(w, m.name))
-  )
-}
 
 /* ─────────────────────── MULTI SELECT MEMBER ───────────────────── */
 function MultiSelectMember({ members, selected, onChange }) {
@@ -709,13 +698,6 @@ function ModalNLP({ grups, onClose, onAdded }) {
   loadMembers()
 }, [grupId])
 
-  useEffect(() => {
-  if (!text.trim() || !members.length) return
-  const matched = extractMembersFromText(text, members)
-  if (matched.length > 0) {
-    setTimeout(() => setSelected(matched.map(m => m.id)), 0)
-  }
-}, [text, members])
 
   // Deteksi multi-payer dari teks sebelum kirim ke backend
   const detectMultiPayer = (text, members) => {
@@ -750,6 +732,7 @@ function ModalNLP({ grups, onClose, onAdded }) {
         .filter(m => selected.includes(m.id))
         .map(m => ({
           id:     m.id,
+          profile_id: m.id,
           name:   m.name, //full name
         })) 
       const res = await api.post('/bills/split-nlp', {
@@ -848,7 +831,7 @@ function ModalNLP({ grups, onClose, onAdded }) {
                 <span className="ml-2 normal-case font-normal text-gray-400">{selected.length} dipilih</span>
               )}
               {text.trim() && selected.length > 0 && (
-                <span className="ml-1 normal-case font-normal text-[#36ADA3]">· auto-detected</span>
+                <span className="ml-1 normal-case font-normal text-[#36ADA3]">· uncheck yang tidak ikut</span>
               )}
             </label>
             {loadMem ? <Sk className="h-10" /> : members.length === 0 ? (
@@ -1192,6 +1175,40 @@ function SummaryCard({ icon: Icon, label, value, accent, sub }) {
   )
 }
 
+/* ─────────────────────── PANDUAN FAB ─────────────────────────── */
+function PanduanFAB() {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="fixed bottom-6 right-6 z-40 flex items-center justify-end">
+      {/* Teks muncul saat expanded */}
+      <div className={`overflow-hidden transition-all duration-300 ease-out ${expanded ? 'max-w-xs opacity-100 mr-3' : 'max-w-0 opacity-0 mr-0'}`}>
+        <Link
+          to="/panduan-ai"
+          className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold text-white whitespace-nowrap"
+          style={{ background: 'linear-gradient(135deg, #232F72 0%, #36ADA3 100%)', boxShadow: '0 4px 14px rgba(35,47,114,0.3)' }}
+        >
+          Bingung nulis format AI? Lihat panduan
+          <ChevronRight size={14} />
+        </Link>
+      </div>
+      {/* Tombol bulat */}
+      <button
+        onClick={() => setExpanded(p => !p)}
+        className="flex items-center justify-center rounded-full text-white shadow-lg transition-all duration-300 hover:scale-110 active:scale-95"
+        style={{
+          width: 52, height: 52,
+          background: expanded
+            ? 'linear-gradient(135deg, #36ADA3 0%, #232F72 100%)'
+            : 'linear-gradient(135deg, #232F72 0%, #36ADA3 100%)',
+          boxShadow: '0 4px 18px rgba(35,47,114,0.35)',
+        }}
+      >
+        {expanded ? <X size={18} /> : <Lightbulb size={18} />}
+      </button>
+    </div>
+  )
+}
+
 /* ─────────────────────── HALAMAN UTAMA ─────────────────────────── */
 const PAGE_SIZE = 10
 
@@ -1527,6 +1544,10 @@ export default function TransaksiPage() {
           </div>
         )}
       </div>
+
+      {/* Floating Panduan Button (INI GANTINYA) */}
+      <PanduanFAB />
+
 
       {/* ── MODALS ── */}
       {modalNlp    && <ModalNLP    grups={grups} onClose={() => setModalNlp(false)}    onAdded={handleAdded} />}
