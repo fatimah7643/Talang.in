@@ -4,7 +4,7 @@ import {
   Plus, Wallet, TrendingDown, Receipt, Users,
   CalendarDays, CheckCircle2, TrendingUp, Lightbulb,
   // eslint-disable-next-line no-unused-vars
-  XCircle, ArrowRight, GitMerge, BarChart2, Clock, User,
+  XCircle, ArrowRight, GitMerge, BarChart2, PieChart, Clock, User,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import api from '../../services/api'
@@ -257,7 +257,9 @@ function RightPanel({ insights, loading }) {
                   style={{ backgroundColor: '#f8f9ff' }}>
                   {ins.icon === 'bar-chart'
                       ? <BarChart2 size={18} style={{ color: '#7c3aed' }} className="shrink-0 mt-0.5" />
-                      : <span className="text-lg shrink-0 mt-0.5">{ins.icon || '💡'}</span>
+                      : ins.icon === 'pie-chart'
+                          ? <PieChart size={18} style={{ color: '#7c3aed' }} className="shrink-0 mt-0.5" />
+                          : <span className="text-lg shrink-0 mt-0.5">{ins.icon || '💡'}</span>
                     }
                   <div>
                     <p className="text-xs font-semibold" style={{ color: C.navy }}>{ins.title}</p>
@@ -346,7 +348,7 @@ export default function Dashboard() {
           totalPengeluaran = arr.reduce((s, t) => s + Number(t.amount ?? t.total_amount ?? 0), 0)
           if (arr.length > 0) {
             setInsights([{
-              icon: 'bar-chart',
+              icon: 'Pie-chart',
               title: `Ringkasan ${list[0].name}`,
               message: `${arr.length} transaksi terbaru dengan total ${fmt(totalPengeluaran)}.`,
             }])
