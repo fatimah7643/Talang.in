@@ -198,6 +198,8 @@ export const simplifyDebt = async (req, res) => {
 
     // Simpan ke simplified_debts (hapus lama, insert baru)
     await supabase.from('simplified_debts').delete().eq('group_id', group_id);
+    await supabase.from('simplified_debt_splits').delete().eq('group_id', group_id);
+
     if (transactions.length > 0) {
       await supabase.from('simplified_debts').insert(
         transactions.map(t => ({
@@ -207,6 +209,22 @@ export const simplifyDebt = async (req, res) => {
           amount:      t.amount,
         }))
       );
+
+      // Simpan mapping split_ids per pasangan debtor→creditor
+      const splitMappings = []
+      transactions.forEach(t => {
+        t.split_ids.forEach(split_id => {
+          splitMappings.push({
+            group_id,
+            debtor_id:   t.from,
+            creditor_id: t.to,
+            split_id,
+          })
+        })
+      })
+      if (splitMappings.length > 0) {
+        await supabase.from('simplified_debt_splits').insert(splitMappings)
+      }
     }
 
     return res.status(200).json({
@@ -398,32 +416,32 @@ export const settleDebt = async (req, res) => {
       return res.status(400).json({ success: false, message: 'debtor_id dan creditor_id wajib diisi.' });
     }
 
-    // Ambil semua bill milik creditor di grup ini
-    const { data: bills } = await supabase
-      .from('bills')
-      .select('id')
+    // Ambil split_ids dari mapping greedy yang sudah disimpan
+    const { data: mappings } = await supabase
+      .from('simplified_debt_splits')
+      .select('split_id')
       .eq('group_id', group_id)
-      .eq('payer_id', creditor_id);
+      .eq('debtor_id', debtor_id)
+      .eq('creditor_id', creditor_id);
 
-    if (!bills || bills.length === 0) {
-      return res.status(200).json({ success: true, message: 'Tidak ada tagihan.', settled: 0 });
+    if (!mappings || mappings.length === 0) {
+      return res.status(200).json({ success: true, message: 'Tidak ada mapping split.', settled: 0 });
     }
 
-    const billIds = bills.map(b => b.id);
+    const splitIds = mappings.map(m => m.split_id);
 
-    // Ambil semua split milik debtor yang belum lunas
+    // Ambil detail splits yang belum lunas
     const { data: splits } = await supabase
       .from('bill_splits')
       .select('id, share_amount')
-      .in('bill_id', billIds)
-      .eq('member_id', debtor_id)
+      .in('id', splitIds)
       .eq('is_paid', false);
 
     if (!splits || splits.length === 0) {
       return res.status(200).json({ success: true, message: 'Semua sudah lunas.', settled: 0 });
     }
 
-    // Tandai manual satu per satu (karena raw() tidak selalu support)
+    // Tandai lunas
     await Promise.all(
       splits.map(s =>
         supabase.from('bill_splits')
@@ -432,7 +450,19 @@ export const settleDebt = async (req, res) => {
       )
     );
 
-    return res.status(200).json({ success: true, message: `${splits.length} split berhasil dilunasi.`, settled: splits.length });
+    // Hapus mapping yang sudah diselesaikan
+    await supabase
+      .from('simplified_debt_splits')
+      .delete()
+      .eq('group_id', group_id)
+      .eq('debtor_id', debtor_id)
+      .eq('creditor_id', creditor_id);
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `${splits.length} split berhasil dilunasi.`, 
+      settled: splits.length 
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
