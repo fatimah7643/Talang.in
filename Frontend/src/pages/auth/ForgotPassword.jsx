@@ -32,10 +32,7 @@ const ForgotPassword = () => {
         style={{ boxShadow: '0 4px 32px rgba(35,47,114,0.10)', border: '1px solid #e8eaf6' }}>
 
         <Link to="/login" className="flex items-center gap-2 w-fit mb-8">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{ backgroundColor: '#121358' }}>
-            <span className="text-white text-xs font-bold">T</span>
-          </div>
+          <img src="/logo.svg" alt="Talang.in" className="w-8 h-8 object-contain" />
           <span className="font-bold text-lg" style={{ color: '#121358' }}>Talang.in</span>
         </Link>
 

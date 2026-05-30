@@ -230,7 +230,7 @@ const Navbar = () => {
     }}>
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <a href="#beranda" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm text-white teal-btn">T</div>
+          <img src="/logo.svg" alt="Talang.in" className="w-9 h-9 object-contain" />
           <span className="font-bold text-xl" style={{ color: scrolled ? P.text : 'white', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             Talang.in
           </span>
@@ -1126,7 +1126,7 @@ const Footer = () => (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
         <div className="col-span-2 md:col-span-1">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-white text-sm teal-btn">T</div>
+            <img src="/logo.svg" alt="Talang.in" className="w-8 h-8 object-contain" />
             <span className="font-bold text-lg" style={{ color: P.text, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Talang.in</span>
           </div>
           <p className="text-xs leading-relaxed mb-4" style={{ color: P.textMuted }}>

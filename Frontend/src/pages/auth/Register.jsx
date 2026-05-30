@@ -57,10 +57,7 @@ const Register = () => {
           {/* Logo */}
           <div className="mb-8">
             <Link to="/" className="flex items-center gap-2 w-fit">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: '#121358' }}>
-                <span className="text-white text-xs font-bold">T</span>
-              </div>
+              <img src="/logo.svg" alt="Talang.in" className="w-8 h-8 object-contain" />
               <span className="font-bold text-lg" style={{ color: '#121358' }}>Talang.in</span>
             </Link>
           </div>

@@ -56,14 +56,11 @@ export default function Sidebar({ unreadCount = 0, isOpen, onClose }) {
       <div className="flex items-center gap-3 px-4 py-3">
   
       {/* Logo T */}
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-base"
-          style={{
-            background: 'linear-gradient(135deg, #232F72 0%, #36ADA3 100%)',
-            color: 'white',
-            boxShadow: '0 4px 12px rgba(35,47,114,0.3)',
-          }}>
-          T
-        </div>
+        <img
+          src="/logo.svg"
+          alt="Talang.in"
+          className="w-12 h-12 shrink-0 object-contain"
+        />
         {/* Text */}
         <div>
           <p className="text-sm font-bold leading-tight" style={{ color: '#121358' }}>
