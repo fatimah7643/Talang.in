@@ -778,17 +778,18 @@ export const getBillSplits = async (req, res) => {
 export const updateBill = async (req, res) => {
   try {
     const { bill_id } = req.params;
-    const { amount, description, category } = req.body;
-    if (!amount && !description && !category) {
+    const { amount, description, category, status } = req.body;
+    if (!amount && !description && !category && !status) {
       return res.status(400).json({
         success: false,
-        message: "Minimal satu field (amount, description, atau category) harus diisi!"
+        message: "Minimal satu field (amount, description, category, atau status) harus diisi!"
       });
     }
     const updatePayload = {};
     if (amount)      updatePayload.amount      = Number(amount);
     if (description) updatePayload.description = description;
     if (category)    updatePayload.category    = category;
+    if (status)      updatePayload.status      = status;
 
     const { data, error } = await supabase
       .from('bills').update(updatePayload).eq('id', bill_id).select().single();
