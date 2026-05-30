@@ -177,6 +177,40 @@ export const removeMember = async (req, res) => {
   }
 };
 
+// DELETE /api/v1/groups/:group_id
+export const deleteGroup = async (req, res) => {
+  try {
+    const { group_id } = req.params;
+    const user_id = req.user.id;
+
+    const { data: member, error: memberError } = await supabase
+      .from('group_members')
+      .select('role')
+      .eq('group_id', group_id)
+      .eq('profile_id', user_id)
+      .single();
+
+    if (memberError || !member) {
+      return res.status(403).json({ success: false, message: 'Kamu bukan anggota grup ini!' });
+    }
+
+    if (member.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Hanya admin yang bisa menghapus grup!' });
+    }
+
+    const { error } = await supabase
+      .from('groups')
+      .delete()
+      .eq('id', group_id);
+
+    if (error) throw error;
+
+    return res.status(200).json({ success: true, message: 'Grup berhasil dihapus.' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // GET /api/v1/groups
 export const getAllGroups = async (req, res) => {
   try {
