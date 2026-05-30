@@ -925,7 +925,7 @@ function ModalDetail({ trx, onClose, grups = [], onDeleted, onStatusUpdate }) {
   const handleMarkLunas = async () => {
     setMarkingLunas(true)
     try {
-      await api.put(`/bills/${trx.id}/status`, { status: 'lunas' })
+      await api.put(`/bills/${trx.id}`, { status: 'lunas' })
       toast.success('Status diperbarui', 'Transaksi ditandai lunas.')
       onStatusUpdate?.(trx.id, 'lunas')
       onClose()
