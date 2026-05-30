@@ -490,10 +490,10 @@ const TickerBanner = () => {
 // ─── Stats ────────────────────────────────────────────────────────────────────
 const Stats = () => {
   const [ref, inView] = useInView()
-  const users        = useCounter(500,  1800, inView)
-  const transactions = useCounter(2000, 2200, inView)
-  const groups       = useCounter(300,  1600, inView)
-  const satisfaction = useCounter(99,   1400, inView)
+  const users        = useCounter(50,  1800, inView)
+  const transactions = useCounter(200, 2200, inView)
+  const groups       = useCounter(30,  1600, inView)
+  const satisfaction = useCounter(99,  1400, inView)
 
   const stats = [
     { value: users,        suffix: '+', label: 'Pengguna Aktif',     icon: <Users size={24} />,   color: P.primary },
@@ -1064,7 +1064,7 @@ const CTA = () => {
             <Users size={16} className="text-white" />
           </div>
           <div>
-            <p className="text-xs font-bold text-white">500+ pengguna</p>
+            <p className="text-xs font-bold text-white">50+ pengguna</p>
             <p className="text-xs text-white/60">sudah bergabung</p>
           </div>
         </div>
