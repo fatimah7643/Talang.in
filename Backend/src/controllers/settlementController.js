@@ -386,3 +386,61 @@ export const getSettledSummary = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// PUT /api/v1/settlements/:group_id/settle
+// Body: { debtor_id, creditor_id }
+export const settleDebt = async (req, res) => {
+  try {
+    const { group_id } = req.params;
+    const { debtor_id, creditor_id } = req.body;
+
+    if (!debtor_id || !creditor_id) {
+      return res.status(400).json({ success: false, message: 'debtor_id dan creditor_id wajib diisi.' });
+    }
+
+    // Ambil semua bill milik creditor di grup ini
+    const { data: bills } = await supabase
+      .from('bills')
+      .select('id')
+      .eq('group_id', group_id)
+      .eq('payer_id', creditor_id);
+
+    if (!bills || bills.length === 0) {
+      return res.status(200).json({ success: true, message: 'Tidak ada tagihan.', settled: 0 });
+    }
+
+    const billIds = bills.map(b => b.id);
+
+    // Ambil semua split milik debtor yang belum lunas
+    const { data: splits } = await supabase
+      .from('bill_splits')
+      .select('id, share_amount')
+      .in('bill_id', billIds)
+      .eq('member_id', debtor_id)
+      .eq('is_paid', false);
+
+    if (!splits || splits.length === 0) {
+      return res.status(200).json({ success: true, message: 'Semua sudah lunas.', settled: 0 });
+    }
+
+    // Update semua jadi lunas
+    const splitIds = splits.map(s => s.id);
+    await supabase
+      .from('bill_splits')
+      .update({ is_paid: true, amount_paid: supabase.raw('share_amount') })
+      .in('id', splitIds);
+
+    // Tandai manual satu per satu (karena raw() tidak selalu support)
+    await Promise.all(
+      splits.map(s =>
+        supabase.from('bill_splits')
+          .update({ is_paid: true, amount_paid: Number(s.share_amount) })
+          .eq('id', s.id)
+      )
+    );
+
+    return res.status(200).json({ success: true, message: `${splits.length} split berhasil dilunasi.`, settled: splits.length });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};

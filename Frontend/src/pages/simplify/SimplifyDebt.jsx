@@ -183,28 +183,10 @@ function TransferRow({ tx, idx, onDone, grupId }) {
             if (done) { setDone(false); return }
             setPaying(true)
             try {
-              const splitIds = tx.split_ids || []
-              if (splitIds.length > 0) {
-                await Promise.all(
-                  splitIds.map(id => api.put(`/settlements/splits/${id}/pay`, { payment_type: 'full' }))
-                )
-              } else {
-                // Greedy menggabungkan utang lintas transaksi — cari split_ids manual dari backend
-                const recapRes = await api.get(`/settlements/${tx.group_id || grupId}/recap`)
-                const recapData = recapRes.data?.data || []
-                // Cari semua split_id dimana debtor = tx.from dan creditor = tx.to
-                const matchedIds = []
-                recapData.forEach(item => {
-                  if (item.debtor_id === tx.from && item.creditor_id === tx.to) {
-                    item.transactions?.forEach(t => { if (t.split_id) matchedIds.push(t.split_id) })
-                  }
-                })
-                if (matchedIds.length > 0) {
-                  await Promise.all(
-                    matchedIds.map(id => api.put(`/settlements/splits/${id}/pay`, { payment_type: 'full' }))
-                  )
-                }
-              }
+              await api.put(`/settlements/${grupId}/settle`, {
+                debtor_id: tx.from,
+                creditor_id: tx.to,
+              })
               setDone(true)
               onDone?.()
             } catch {
