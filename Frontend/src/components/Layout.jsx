@@ -35,10 +35,7 @@ const Layout = ({ children }) => {
             <Menu size={18} style={{ color: C.navy }} />
           </button>
           <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="none" width="28" height="28">
-              <rect width="36" height="36" rx="9" fill="#232F72"/>
-              <path d="M10 10h16v2.8h-6.4v13.2h-3.2V12.8H10V10z" fill="white"/>
-            </svg>
+            <img src="/logo.svg" alt="Talang.in" className="w-7 h-7 object-contain" />
             <span className="font-bold text-sm" style={{ color: C.navy }}>Talang.in</span>
           </div>
         </div>

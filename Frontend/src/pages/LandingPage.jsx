@@ -1160,7 +1160,7 @@ const Footer = () => (
         </div>
         <div>
           <p className="text-xs font-bold mb-4 tracking-wider" style={{ color: P.text, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>HUBUNGI KAMI</p>
-          <p className="text-xs mb-2" style={{ color: P.textMuted }}>helo@talang.in</p>
+          <p className="text-xs mb-2" style={{ color: P.textMuted }}>CC26-PSU151@student.devacademy.id</p>
           <p className="text-xs" style={{ color: P.textMuted }}>Tim CC26-PSU151</p>
           <div className="mt-4 px-3 py-2 rounded-xl text-center text-xs font-semibold flex items-center justify-center gap-1.5"
             style={{ backgroundColor: `rgba(54,173,163,0.1)`, color: P.teal }}>
