@@ -1,8 +1,10 @@
+// eslint-disable-next-line no-unused-vars
 import { useState } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import {
+  // eslint-disable-next-line no-unused-vars
   LayoutDashboard, Users, Receipt, Wallet, GitMerge,
-  BarChart2, Bell, UserCircle, LogOut, Plus, Clock, Menu, X,
+  BarChart2, Bell, UserCircle, LogOut, Plus, Clock,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
@@ -118,12 +120,12 @@ export default function Sidebar({ unreadCount = 0, isOpen, onClose }) {
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
             style={{ backgroundColor: C.navy }}
-          >
-            {user?.name?.[0]?.toUpperCase() ?? 'U'}
+          >{(user?.full_name ?? user?.user_metadata?.full_name ?? user?.email)?.[0]?.toUpperCase() ?? 'U'}
+            
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold truncate" style={{ color: C.navyDark }}>
-              {user?.name ?? 'Pengguna'}
+              {user?.full_name ?? user?.user_metadata?.full_name ?? user?.name ?? 'Pengguna'}
             </p>
             <p className="text-xs truncate text-gray-400">{user?.email ?? ''}</p>
           </div>

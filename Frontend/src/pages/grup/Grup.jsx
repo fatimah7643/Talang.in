@@ -279,6 +279,77 @@ function ModalKeluar({ grup, onClose, onLeft, userId }) {
   )
 }
 
+/* ─────────────────────── MODAL DELETE GRUP ──────────────────────── */
+function ModalHapusGrup({ grup, onClose, onDeleted }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const [confirm, setConfirm] = useState('')
+  const toast = useToast()
+
+  const handleDelete = async () => {
+    if (confirm !== grup.name) return
+    setLoading(true); setError('')
+    try {
+      await api.delete(`/groups/${grup.id}`)
+      onDeleted(grup.id)
+      onClose()
+      toast.success('Grup berhasil dihapus.')
+    } catch (e) {
+      setError(e.response?.data?.message || 'Gagal menghapus grup.')
+      toast.error('Gagal menghapus grup.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <ModalWrapper onClose={onClose} title="Hapus Grup?">
+      <div className="space-y-4">
+        <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-4 flex items-start gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-100 shrink-0">
+            <Trash2 size={16} className="text-red-500" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-red-700 mb-1">"{grup?.name}"</p>
+            <p className="text-xs text-red-500 leading-relaxed">
+              Semua data transaksi, hutang, dan anggota dalam grup ini akan ikut terhapus permanen.
+            </p>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+            Ketik nama grup untuk konfirmasi
+          </label>
+          <input
+            type="text"
+            placeholder={grup?.name}
+            value={confirm}
+            onChange={e => setConfirm(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-100 bg-white"
+          />
+        </div>
+        {error && (
+          <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+            <AlertCircle size={15} className="shrink-0" /> {error}
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all">
+            Batal
+          </button>
+          <button onClick={handleDelete} disabled={loading || confirm !== grup?.name}
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-red-500 py-2.5
+              text-sm font-semibold text-white hover:bg-red-600 transition-all disabled:opacity-40 active:scale-[0.98]">
+            {loading && <Loader2 size={15} className="animate-spin" />}
+            Hapus Permanen
+          </button>
+        </div>
+      </div>
+    </ModalWrapper>
+  )
+}
+
 /* ─────────────────────── GRUP CARD (list kiri) ─────────────── */
 function GrupCard({ grup, isSelected, onSelect, onUndang, onKeluar }) {
   const memberCount = grup.member_count ?? 0
@@ -340,7 +411,7 @@ function GrupCard({ grup, isSelected, onSelect, onUndang, onKeluar }) {
 }
 
 /* ─────────────────────── DETAIL PANEL ──────────────────────── */
-function DetailPanel({ grup, onUndang, onKeluar, onClose, onMembersUpdated }) {
+function DetailPanel({ grup, onUndang, onKeluar, onHapus, onClose, onMembersUpdated }) {
   const [members, setMembers]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState('')
@@ -436,6 +507,14 @@ function DetailPanel({ grup, onUndang, onKeluar, onClose, onMembersUpdated }) {
                 text-sm font-medium text-white/80 hover:bg-white/20 hover:text-white transition-all">
               <LogOut size={15} /> Keluar
             </button>
+
+            {grup.is_owner && (
+              <button onClick={() => onHapus(grup)}
+                className="flex items-center gap-2 rounded-xl bg-red-500/80 px-4 py-2.5
+                  text-sm font-medium text-white hover:bg-red-600 transition-all">
+                <Trash2 size={15} /> Hapus
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -560,6 +639,7 @@ export default function GrupPage() {
   const [modalBuat, setModalBuat] = useState(false)
   const [modalUndang, setModalUndang] = useState(null)
   const [modalKeluar, setModalKeluar] = useState(null)
+  const [modalHapus, setModalHapus]   = useState(null)
   const [selected, setSelected]   = useState(null)
 
   const fetchGrups = useCallback(async () => {
@@ -597,6 +677,12 @@ export default function GrupPage() {
   }
 
   const handleLeft = (grupId) => {
+    setGrups(p => p.filter(g => g.id !== grupId))
+    if (selected?.id === grupId) setSelected(null)
+  }
+
+  // Handle delete group
+  const handleDeleted = (grupId) => {
     setGrups(p => p.filter(g => g.id !== grupId))
     if (selected?.id === grupId) setSelected(null)
   }
@@ -729,6 +815,7 @@ export default function GrupPage() {
             grup={selected}
             onUndang={setModalUndang}
             onKeluar={setModalKeluar}
+            onHapus={setModalHapus}
             onClose={() => setSelected(null)}
             onMembersUpdated={fetchGrups}
           />
@@ -768,6 +855,14 @@ export default function GrupPage() {
           grup={modalKeluar}
           onLeft={handleLeft}
           userId={user?.id}   // FIX #4: pass userId untuk delete member
+        />
+      )}
+
+      {modalHapus && (
+        <ModalHapusGrup
+          onClose={() => setModalHapus(null)}
+          grup={modalHapus}
+          onDeleted={handleDeleted}
         />
       )}
     </div>
