@@ -255,7 +255,10 @@ function RightPanel({ insights, loading }) {
               {insights.map((ins, i) => (
                 <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl"
                   style={{ backgroundColor: '#f8f9ff' }}>
-                  <span className="text-lg shrink-0 mt-0.5">{ins.icon || '💡'}</span>
+                  {ins.icon === 'bar-chart'
+                      ? <BarChart2 size={18} style={{ color: '#7c3aed' }} className="shrink-0 mt-0.5" />
+                      : <span className="text-lg shrink-0 mt-0.5">{ins.icon || '💡'}</span>
+                    }
                   <div>
                     <p className="text-xs font-semibold" style={{ color: C.navy }}>{ins.title}</p>
                     <p className="text-xs text-gray-500 leading-relaxed mt-0.5">{ins.message}</p>
@@ -343,7 +346,7 @@ export default function Dashboard() {
           totalPengeluaran = arr.reduce((s, t) => s + Number(t.amount ?? t.total_amount ?? 0), 0)
           if (arr.length > 0) {
             setInsights([{
-              icon: '📊',
+              icon: 'bar_chart',
               title: `Ringkasan ${list[0].name}`,
               message: `${arr.length} transaksi terbaru dengan total ${fmt(totalPengeluaran)}.`,
             }])

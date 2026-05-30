@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   Clock, Search, Receipt, AlertCircle,
   RefreshCw, ChevronDown, Users, X,
-  ArrowUpRight, CalendarDays, Eye, Plus,
+  ArrowUpRight, CalendarDays, Plus,
   SlidersHorizontal,
 } from 'lucide-react'
 import api from '../../services/api'
@@ -164,16 +164,6 @@ function TxRow({ tx }) {
         {tx.group_name && (
           <p className="text-xs text-gray-400 mt-0.5 truncate">{tx.group_name}</p>
         )}
-      </div>
-
-      {/* Aksi */}
-      <div className="sm:px-4 sm:py-3.5 flex justify-start sm:justify-center">
-        <button
-          className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100
-            text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-all"
-        >
-          <Eye size={13} />
-        </button>
       </div>
     </div>
   )
