@@ -16,6 +16,7 @@ const app = express();
 
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  'https://talang-in-bay.vercel.app/',
   'http://localhost:5173',
   'http://localhost:3000',
 ].filter(Boolean);
