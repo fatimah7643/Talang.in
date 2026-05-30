@@ -111,7 +111,7 @@ export const simplifyDebt = async (req, res) => {
     // ✅ Step 2: ambil splits berdasarkan bill_id
     const { data: splits, error: splitsError } = await supabase
       .from('bill_splits')
-      .select('member_id, bill_id, share_amount, amount_paid, is_paid')
+      .select('id, member_id, bill_id, share_amount, amount_paid, is_paid')
       .in('bill_id', billIds)
       .eq('is_paid', false);
 
@@ -171,12 +171,22 @@ export const simplifyDebt = async (req, res) => {
       const c = creditors[j];
       const settle = Math.min(d.amount, c.amount);
 
+      // Kumpulkan split_ids dari debtor ke creditor
+      const relevantSplitIds = (splits || [])
+        .filter(s => {
+          const bill = billMap[s.bill_id]
+          return s.member_id === d.id && bill?.payer_id === c.id && !s.is_paid
+        })
+        .map(s => s.id)
+        .filter(Boolean)
+
       transactions.push({
         from: d.id,
         from_name: profileMap[d.id] || d.id,
         to: c.id,
         to_name: profileMap[c.id] || c.id,
-        amount: settle
+        amount: settle,
+        split_ids: relevantSplitIds
       });
 
       d.amount -= settle;
@@ -234,7 +244,7 @@ export const markAsPaid = async (req, res) => {
 
     const { data: split, error: findError } = await supabase
       .from('bill_splits')
-      .select('id, share_amount, amount_paid, is_paid')
+      .select('id, bill_id, share_amount, amount_paid, is_paid')
       .eq('id', split_id)
       .single();
 
@@ -267,6 +277,25 @@ export const markAsPaid = async (req, res) => {
       .select();
 
     if (updateError) throw updateError;
+
+    if (new_is_paid) {
+      try {
+        const { data: allSplits } = await supabase
+          .from('bill_splits')
+          .select('is_paid')
+          .eq('bill_id', split.bill_id)
+
+        const semuaLunas = allSplits?.every(s => s.is_paid)
+        if (semuaLunas) {
+          await supabase
+            .from('bills')
+            .update({ status: 'lunas' })
+            .eq('id', split.bill_id)
+        }
+      } catch (billUpdateErr) {
+        console.warn('Gagal update status bill:', billUpdateErr.message)
+      }
+    }
       // Notifikasi ke creditor kalau ada pembayaran
       try {
       const { data: splitDetail } = await supabase

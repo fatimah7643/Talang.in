@@ -675,6 +675,7 @@ function ModalNLP({ grups, onClose, onAdded }) {
   const [loadMem, setLoadMem] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState('')
+  const [preview, setPreview] = useState(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -764,9 +765,8 @@ function ModalNLP({ grups, onClose, onAdded }) {
         paid_by_name: paidByStr || '—',
         splits:       [],
       }
-      onAdded(normalizedTrx)
-      onClose()
-      toast.success('Tagihan AI berhasil!', 'Transaksi berhasil diproses.')
+     const splitDetails = res.data?.split_details || []
+      setPreview({ bill: normalizedTrx, splits: splitDetails })
     } catch (e) {
       toast.error('AI gagal', e.response?.data?.message || 'Coba tulis lebih jelas.')
       setError(e.response?.data?.message || 'Gagal memproses. Coba tulis lebih jelas.')
@@ -850,6 +850,48 @@ function ModalNLP({ grups, onClose, onAdded }) {
             </div>
           )}
 
+          {preview && (
+            <div className="rounded-2xl border border-[#36ADA3]/30 bg-[#E1F5EE]/30 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={15} className="text-[#0F6E56]" />
+                <p className="text-sm font-bold text-[#0F6E56]">Transaksi berhasil diproses AI</p>
+              </div>
+              <div className="rounded-xl bg-white border border-gray-100 px-4 py-3">
+                <p className="text-xs text-gray-400 mb-0.5">Total tagihan</p>
+                <p className="text-lg font-bold text-[#121358]">Rp {Number(preview.bill.amount || 0).toLocaleString('id-ID')}</p>
+                <p className="text-xs text-gray-500">{preview.bill.title}</p>
+              </div>
+              {preview.splits.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rincian Split</p>
+                  {preview.splits.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-xl bg-white border border-gray-100 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-[#232F72] text-white text-xs font-bold flex items-center justify-center">
+                          {(s.member_name || s.name || '?')[0]?.toUpperCase()}
+                        </div>
+                        <span className="text-sm text-gray-700">{s.member_name || s.name || '—'}</span>
+                      </div>
+                      <span className="text-sm font-bold text-[#121358]">
+                        Rp {Number(s.share_amount || s.amount || 0).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setPreview(null)}
+                  className="flex-1 rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all">
+                  Edit Ulang
+                </button>
+                <button onClick={() => { onAdded(preview.bill); toast.success('Tersimpan!', 'Transaksi berhasil disimpan.'); onClose() }}
+                  className="flex-1 rounded-xl bg-[#232F72] py-2.5 text-sm font-semibold text-white hover:bg-[#121358] transition-all">
+                  Simpan Transaksi
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button onClick={onClose}
               className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all">
@@ -872,12 +914,27 @@ function ModalNLP({ grups, onClose, onAdded }) {
 }
 
 /* ─────────────────────── MODAL DETAIL ──────────────────────────── */
-function ModalDetail({ trx, onClose, grups = [], onDeleted }) {
+function ModalDetail({ trx, onClose, grups = [], onDeleted, onStatusUpdate }) {
   const [splits, setSplits]             = useState([])
   const [loadingSplits, setLoadingSplits] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting]           = useState(false)
+  const [markingLunas, setMarkingLunas]   = useState(false)
   const toast = useToast()
+
+  const handleMarkLunas = async () => {
+    setMarkingLunas(true)
+    try {
+      await api.put(`/bills/${trx.id}/status`, { status: 'lunas' })
+      toast.success('Status diperbarui', 'Transaksi ditandai lunas.')
+      onStatusUpdate?.(trx.id, 'lunas')
+      onClose()
+    } catch (e) {
+      toast.error('Gagal', e.response?.data?.message || 'Gagal mengubah status.')
+    } finally {
+      setMarkingLunas(false)
+    }
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -1007,11 +1064,18 @@ function ModalDetail({ trx, onClose, grups = [], onDeleted }) {
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button onClick={() => setConfirmDelete(true)}
                 className="flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition-all">
                 <Trash2 size={14} /> Hapus
               </button>
+              {trx.status !== 'lunas' && (
+                <button onClick={handleMarkLunas} disabled={markingLunas}
+                  className="flex items-center gap-1.5 rounded-xl border border-[#36ADA3] px-4 py-3 text-sm font-medium text-[#36ADA3] hover:bg-[#36ADA3]/10 transition-all disabled:opacity-60">
+                  {markingLunas ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  Tandai Lunas
+                </button>
+              )}
               <button onClick={onClose}
                 className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-all active:scale-[0.99]">
                 Tutup
@@ -1329,6 +1393,15 @@ export default function TransaksiPage() {
     })
   }
 
+  const handleStatusUpdate = (updatedId, newStatus) => {
+    setTrxs(p => p.map(t => t.id === updatedId ? { ...t, status: newStatus } : t))
+    setSummary(s => ({
+      ...s,
+      lunas:   newStatus === 'lunas' ? s.lunas + 1 : Math.max(0, s.lunas - (s.lunas > 0 ? 1 : 0)),
+      pending: newStatus === 'lunas' ? Math.max(0, s.pending - 1) : s.pending,
+    }))
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#F7F8FC]">
       {/* ── TOPBAR ── */}
@@ -1555,7 +1628,7 @@ export default function TransaksiPage() {
       {/* ── MODALS ── */}
       {modalNlp    && <ModalNLP    grups={grups} onClose={() => setModalNlp(false)}    onAdded={handleAdded} />}
       {modalTambah && <ModalTambah grups={grups} onClose={() => setModalTambah(false)} onAdded={handleAdded} currentUser={user} />}
-      {modalDetail && <ModalDetail trx={modalDetail} onClose={() => setModalDetail(null)} grups={grups} onDeleted={handleDeleted} />}
+      {modalDetail && <ModalDetail trx={modalDetail} onClose={() => { setModalDetail(null); fetchTrxs(page, filters, search) }} grups={grups} onDeleted={handleDeleted} onStatusUpdate={handleStatusUpdate} />}
     </div>
   )
 }

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Users, Plus, Search, LogOut, UserPlus, Copy, Check,
+  Users, Plus, Search, LogOut, UserPlus, //Copy, Check,
   ChevronRight, AlertCircle, Loader2, RefreshCw, Crown,
-  Hash, Calendar, X, CheckCircle2,
+  //Hash, 
+  Calendar, X, CheckCircle2,
   // eslint-disable-next-line no-unused-vars
   Trash2, Mail,
 } from 'lucide-react'
@@ -130,20 +131,21 @@ function ModalBuatGrup({ onClose, onCreated, userId }) {
 
 /* ─────────────────────── MODAL UNDANG ──────────────────────── */
 function ModalUndang({ grup, onClose }) {
-  const [copied, setCopied]   = useState(false)
+  //const [copied, setCopied]   = useState(false)
   const [username, setUsername] = useState('')
   const [error, setError]     = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const toast = useToast()
 
-  const inviteLink = `${window.location.origin}/join/${grup?.id || ''}`
+  {/*const inviteLink = `${window.location.origin}/join/${grup?.id || ''}`
 
-  const handleCopy = () => {
+   const handleCopy = () => {
     navigator.clipboard.writeText(inviteLink)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
+  } 
+    */}
 
   const handleAddMember = async () => {
     if (!username.trim()) { setError('Username wajib diisi.'); return }
@@ -168,6 +170,7 @@ function ModalUndang({ grup, onClose }) {
     <ModalWrapper onClose={onClose} title={`Undang ke "${grup?.name}"`} subtitle="Bagikan link atau tambah via username">
       <div className="space-y-5">
         {/* Link undangan */}
+        {/*
         <div>
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Link Undangan</label>
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
@@ -185,7 +188,8 @@ function ModalUndang({ grup, onClose }) {
           <div className="h-px flex-1 bg-gray-100" />
           <span className="text-xs text-gray-400">atau tambah langsung</span>
           <div className="h-px flex-1 bg-gray-100" />
-        </div>
+        </div> 
+        */}
 
         {/* Add by Username */}
         <div>

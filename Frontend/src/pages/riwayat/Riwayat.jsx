@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Clock, Search, Receipt, AlertCircle,
   RefreshCw, ChevronDown, Users, X,
@@ -272,13 +273,15 @@ export default function Riwayat() {
             />
           ) : null}
           {selectedGrup && (
-            <button
+            <Link
+              to="/transaksi"
               className="flex items-center gap-1.5 rounded-xl bg-[#1D9E75] px-3.5 py-2
                 text-sm font-medium text-white hover:bg-[#0F6E56] transition-all"
+              style={{ position: 'relative', zIndex: 30 }}
             >
               <Plus size={14} />
               <span className="hidden sm:inline">Tambah Transaksi</span>
-            </button>
+            </Link>
           )}
         </div>
       </header>

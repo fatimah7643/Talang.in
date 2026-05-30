@@ -80,9 +80,10 @@ function StatCard({ label, value, sub, icon: Icon, color, accent }) {
 }
 
 // ─── Transfer row ─────────────────────────────────────────────────────────────
-function TransferRow({ tx, idx }) {
+function TransferRow({ tx, idx, onDone, grupId }) {
   const [done, setDone] = useState(false)
   const [open, setOpen] = useState(false)
+  const [paying, setPaying] = useState(false)
 
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -177,7 +178,41 @@ function TransferRow({ tx, idx }) {
           </div>
 
           {/* Tombol tandai selesai */}
-          <button onClick={(e) => { e.stopPropagation(); setDone(p => !p) }}
+          <button onClick={async (e) => {
+            e.stopPropagation()
+            if (done) { setDone(false); return }
+            setPaying(true)
+            try {
+              const splitIds = tx.split_ids || []
+              if (splitIds.length > 0) {
+                await Promise.all(
+                  splitIds.map(id => api.put(`/settlements/splits/${id}/pay`, { payment_type: 'full' }))
+                )
+              } else {
+                // Greedy menggabungkan utang lintas transaksi — cari split_ids manual dari backend
+                const recapRes = await api.get(`/settlements/${tx.group_id || grupId}/recap`)
+                const recapData = recapRes.data?.data || []
+                // Cari semua split_id dimana debtor = tx.from dan creditor = tx.to
+                const matchedIds = []
+                recapData.forEach(item => {
+                  if (item.debtor_id === tx.from && item.creditor_id === tx.to) {
+                    item.transactions?.forEach(t => { if (t.split_id) matchedIds.push(t.split_id) })
+                  }
+                })
+                if (matchedIds.length > 0) {
+                  await Promise.all(
+                    matchedIds.map(id => api.put(`/settlements/splits/${id}/pay`, { payment_type: 'full' }))
+                  )
+                }
+              }
+              setDone(true)
+              onDone?.()
+            } catch {
+              setDone(true)
+            } finally {
+              setPaying(false)
+            }
+          }}
             className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold border-2 transition-all"
             style={{
               borderColor: done ? C.teal : '#e5e7eb',
@@ -185,7 +220,7 @@ function TransferRow({ tx, idx }) {
               color: done ? C.teal : '#6b7280',
             }}>
             <CheckCircle2 size={15} />
-            {done ? 'Sudah ditransfer ✓' : 'Tandai sudah ditransfer'}
+            {paying ? 'Memproses...' : done ? 'Sudah ditransfer ✓' : 'Tandai sudah ditransfer'}
           </button>
         </div>
       )}
@@ -463,7 +498,7 @@ export default function SimplifyDebt() {
                     </div>
                   ) : transferOpen ?(
                     <div className="space-y-3">
-                      {transfers.map((tx, i) => <TransferRow key={i} tx={tx} idx={i} />)}
+                      {transfers.map((tx, i) => <TransferRow key={i} tx={tx} idx={i} onDone={fetchData} grupId={selectedGrup} />)}
                     </div>
                   ) : null }
                 </div>
