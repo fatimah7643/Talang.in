@@ -346,7 +346,7 @@ export default function Dashboard() {
           totalPengeluaran = arr.reduce((s, t) => s + Number(t.amount ?? t.total_amount ?? 0), 0)
           if (arr.length > 0) {
             setInsights([{
-              icon: 'bar_chart',
+              icon: 'bar-chart',
               title: `Ringkasan ${list[0].name}`,
               message: `${arr.length} transaksi terbaru dengan total ${fmt(totalPengeluaran)}.`,
             }])
