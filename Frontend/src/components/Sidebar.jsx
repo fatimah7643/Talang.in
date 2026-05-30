@@ -117,7 +117,7 @@ export default function Sidebar({ unreadCount = 0, isOpen, onClose }) {
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0"
             style={{ backgroundColor: C.navy }}
-          >{(user?.full_name ?? user?.user_metadata?.full_name ?? user?.email)?.[0]?.toUpperCase() ?? 'U'}
+          >{user?.full_name ?? user?.name ?? user?.user_metadata?.full_name ?? user?.email ?? 'Pengguna'}
             
           </div>
           <div className="flex-1 min-w-0">

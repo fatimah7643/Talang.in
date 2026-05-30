@@ -433,7 +433,7 @@ export default function Dashboard() {
               </div>
               {/* Greeting */}
               <h1 className="text-2xl font-bold mb-1">
-                Halo, {user?.full_name ?? 'Pengguna Talang.in'}!
+                Halo, {user?.full_name ?? user?.name ?? user?.user_metadata?.full_name ?? 'Pengguna Talang.in'}!
               </h1>
               <p className="text-sm opacity-70 max-w-md">
                 Pantau pengeluaran, utang, dan kondisi keuangan grupmu dalam satu tempat.
