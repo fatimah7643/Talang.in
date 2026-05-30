@@ -186,6 +186,7 @@ function TransferRow({ tx, idx, onDone, grupId }) {
               await api.put(`/settlements/${grupId}/settle`, {
                 debtor_id: tx.from,
                 creditor_id: tx.to,
+                amount: tx.amount,
               })
               setDone(true)
               onDone?.()
