@@ -423,13 +423,6 @@ export const settleDebt = async (req, res) => {
       return res.status(200).json({ success: true, message: 'Semua sudah lunas.', settled: 0 });
     }
 
-    // Update semua jadi lunas
-    const splitIds = splits.map(s => s.id);
-    await supabase
-      .from('bill_splits')
-      .update({ is_paid: true, amount_paid: supabase.raw('share_amount') })
-      .in('id', splitIds);
-
     // Tandai manual satu per satu (karena raw() tidak selalu support)
     await Promise.all(
       splits.map(s =>

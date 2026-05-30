@@ -189,8 +189,8 @@ function TransferRow({ tx, idx, onDone, grupId }) {
               })
               setDone(true)
               onDone?.()
-            } catch {
-              setDone(true)
+            } catch (e) {
+              console.error('Settle gagal:', e)
             } finally {
               setPaying(false)
             }
