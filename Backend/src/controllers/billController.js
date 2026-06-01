@@ -696,26 +696,61 @@ export const splitBillNLP = async (req, res) => {
 export const getBillHistory = async (req, res) => {
   try {
     const { group_id } = req.params;
-    const { data, error } = await supabase
-      .from('bills')
-      .select('*, payer:profiles!payer_id(full_name, username), group:groups!group_id(group_name)')
-      .eq('group_id', group_id)
-      .order('created_at', { ascending: false });
+    const {
+      page     = 1,
+      limit    = 10,
+      search   = '',
+      category = '',
+      kategori = '',   // fallback nama parameter dari frontend lama
+    } = req.query;
 
-    if (error) throw error;
+    const pageNum        = Math.max(1, parseInt(page))
+    const limitNum       = Math.max(1, Math.min(100, parseInt(limit)))
+    const offset         = (pageNum - 1) * limitNum
+    const filterCategory = category || kategori  // terima kedua nama
+
+    // ── Build query ──────────────────────────────────────────────
+    let query = supabase
+      .from('bills')
+      .select(
+        '*, payer:profiles!payer_id(full_name, username), group:groups!group_id(group_name)',
+        { count: 'exact' }
+      )
+      .eq('group_id', group_id)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limitNum - 1)
+
+    if (filterCategory) {
+      query = query.eq('category', filterCategory)
+    }
+
+    if (search.trim()) {
+      query = query.ilike('description', `%${search.trim()}%`)
+    }
+
+    const { data, error, count } = await query
+    if (error) throw error
 
     const mapped = (data || []).map(b => ({
       ...b,
       paid_by_name: b.payer?.full_name || b.payer?.username || '—',
       group_name:   b.group?.group_name || '—'
-    }));
+    }))
+
+    const totalCount = count ?? mapped.length
+    const totalPages = Math.ceil(totalCount / limitNum) || 1
 
     return res.status(200).json({
       success: true,
       message: "Riwayat transaksi grup berhasil dimuat.",
       group_id,
-      total_bills: mapped.length,
-      data: mapped
+      data: mapped,
+      meta: {
+        total:       totalCount,
+        total_pages: totalPages,
+        page:        pageNum,
+        limit:       limitNum,
+      }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
