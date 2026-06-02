@@ -311,7 +311,7 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
           amount:       lentAmount,
           description:  form.title,
           category:     form.category,
-          split_method: 'custom',
+          split_method: form.split_method,
           splits:       splitsPayload,
         }
 
@@ -324,7 +324,7 @@ function ModalTambah({ grups, onClose, onAdded, currentUser }) {
           category:     bill.category    || form.category,
           date:         bill.created_at  || form.date,
           status:       'pending',
-          split_method: 'custom',
+          split_method: form.split_method,
           group_name:   grup?.name || '—',
           paid_by_name: payer.name,
           splits:       (res.data?.split_details || []).map(s => ({
